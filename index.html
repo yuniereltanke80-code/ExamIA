@@ -1,0 +1,1931 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a237e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ExamIA">
+<title>ExamIA — Sistema de Exámenes Inteligente</title>
+<link rel="manifest" href="manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --ink:       #0d1117;
+    --paper:     #f5f7ff;
+    --primary:   #1a237e;
+    --accent:    #00bfa5;
+    --warn:      #ff6d00;
+    --danger:    #c62828;
+    --success:   #2e7d32;
+    --card:      #ffffff;
+    --border:    #dde3f0;
+    --muted:     #6b7280;
+    --radius:    14px;
+    --shadow:    0 2px 16px rgba(26,35,126,.10);
+    --font:      'Space Grotesk', system-ui, sans-serif;
+    --mono:      'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 100dvh;
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    background: var(--primary); color: #fff; padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,.3);
+  }
+  .topbar-logo { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .topbar-logo span { color: var(--accent); }
+  .topbar-sub { font-size: 11px; opacity: .7; letter-spacing: .5px; text-transform: uppercase; flex: 1; }
+  .topbar-mode {
+    font-size: 11px; font-weight: 600; background: rgba(255,255,255,.15);
+    border-radius: 20px; padding: 4px 12px; cursor: pointer; border: 1px solid rgba(255,255,255,.2);
+    transition: background .2s;
+  }
+  .topbar-mode:hover { background: rgba(255,255,255,.25); }
+  .topbar-profile {
+    font-size: 20px; cursor: pointer; width: 32px; height: 32px;
+    border-radius: 50%; background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.2);
+    display: flex; align-items: center; justify-content: center; transition: background .2s;
+  }
+  .topbar-profile:hover { background: rgba(255,255,255,.3); }
+
+  .screen { display: none; padding: 20px; max-width: 700px; margin: 0 auto; }
+  .screen.active { display: block; }
+
+  .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+  .role-card {
+    background: var(--card); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 28px 20px; text-align: center; cursor: pointer;
+    transition: border-color .2s, transform .15s, box-shadow .2s; box-shadow: var(--shadow);
+  }
+  .role-card:hover { border-color: var(--primary); transform: translateY(-3px); box-shadow: 0 8px 24px rgba(26,35,126,.15); }
+  .role-card:active { transform: translateY(0); }
+  .role-card.locked { opacity: .45; cursor: not-allowed; pointer-events: none; }
+  .role-card .icon { font-size: 44px; margin-bottom: 12px; }
+  .role-card h3 { font-size: 18px; font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+  .role-card p { font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+  .card {
+    background: var(--card); border-radius: var(--radius); padding: 20px;
+    box-shadow: var(--shadow); margin-bottom: 16px; border: 1px solid var(--border);
+  }
+  .card-title { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: 12px 14px; border: 1.5px solid var(--border);
+    border-radius: 10px; font-family: var(--font); font-size: 14px; color: var(--ink);
+    background: var(--paper); transition: border-color .2s, box-shadow .2s; outline: none;
+  }
+  .field input:focus, .field textarea:focus, .field select:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,35,126,.1);
+  }
+  .field textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 12px 24px; border-radius: 10px; font-family: var(--font); font-size: 14px;
+    font-weight: 600; cursor: pointer; border: none; transition: all .18s; text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: #283593; transform: translateY(-1px); }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { background: #00a693; }
+  .btn-warn { background: var(--warn); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); }
+  .btn-ghost:hover { background: rgba(26,35,126,.06); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-sm { padding: 8px 16px; font-size: 13px; border-radius: 8px; }
+  .btn-block { width: 100%; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+  .question-item {
+    background: var(--paper); border: 1.5px solid var(--border); border-radius: 10px;
+    padding: 14px; margin-bottom: 10px; position: relative;
+  }
+  .question-num { font-size: 11px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+  .question-text { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+  .del-btn { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 18px; position: absolute; top: 10px; right: 10px; padding: 2px 6px; border-radius: 6px; }
+  .del-btn:hover { background: rgba(198,40,40,.1); }
+
+  .timer-display {
+    text-align: center; font-family: var(--mono); font-size: 48px; font-weight: 700;
+    color: var(--primary); padding: 20px; letter-spacing: 2px;
+  }
+  .timer-display.warning { color: var(--warn); animation: pulse 1s infinite; }
+  .timer-display.danger { color: var(--danger); animation: pulse .5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px;
+    font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  }
+  .badge-success { background: #e8f5e9; color: var(--success); }
+  .badge-warn { background: #fff3e0; color: var(--warn); }
+  .badge-danger { background: #ffebee; color: var(--danger); }
+  .badge-info { background: #e3f2fd; color: #1565c0; }
+
+  .score-circle {
+    width: 100px; height: 100px; border-radius: 50%; margin: 16px auto;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700; font-family: var(--mono); border: 6px solid;
+  }
+  .score-high { color: var(--success); border-color: var(--success); background: #e8f5e9; }
+  .score-mid  { color: var(--warn);    border-color: var(--warn);    background: #fff3e0; }
+  .score-low  { color: var(--danger);  border-color: var(--danger);  background: #ffebee; }
+
+  .results-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .results-table th { background: var(--primary); color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .5px; }
+  .results-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .results-table tr:last-child td { border-bottom: none; }
+  .results-table tr:hover td { background: #f0f4ff; }
+
+  .progress-bar { background: var(--border); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 8px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 4px; transition: width .3s; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
+    background: #1a237e; color: #fff; padding: 12px 24px; border-radius: 30px;
+    font-size: 14px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,.3);
+    transition: transform .3s; z-index: 9999; white-space: nowrap; max-width: 90vw;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 200;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--card); border-radius: var(--radius); padding: 24px; max-width: 440px; width: 100%; box-shadow: 0 8px 40px rgba(0,0,0,.2); }
+  .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; color: var(--primary); }
+  .modal p  { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 16px; }
+
+  .ai-loading {
+    display: flex; align-items: center; gap: 12px; padding: 16px;
+    background: linear-gradient(135deg, #e8eaf6, #e3f2fd); border-radius: 10px; margin: 10px 0;
+  }
+  .ai-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--primary); animation: ai-bounce .8s infinite; }
+  .ai-dot:nth-child(2) { animation-delay: .15s; background: var(--accent); }
+  .ai-dot:nth-child(3) { animation-delay: .30s; background: var(--warn); }
+  @keyframes ai-bounce { 0%,80%,100%{transform:scale(0)} 40%{transform:scale(1)} }
+
+  .answer-box {
+    background: var(--card); border-radius: var(--radius); padding: 20px;
+    box-shadow: var(--shadow); margin-bottom: 16px; border: 1px solid var(--border);
+    display: none; /* Ocultas por defecto, se muestran una a una */
+  }
+  .answer-box.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .exam-nav {
+    display: flex; justify-content: space-between; align-items: center; margin-top: 20px; gap: 10px;
+  }
+  .exam-progress {
+    font-size: 13px; font-weight: 600; color: var(--muted);
+  }
+  .answer-box .q-label { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+  .answer-box .q-text { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--ink); }
+  .answer-box textarea {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-family: var(--font); font-size: 13px; min-height: 70px; resize: vertical; outline: none;
+    background: #fff; transition: border-color .2s;
+  }
+  .answer-box textarea:focus { border-color: var(--accent); }
+
+  .tabs { display: flex; gap: 4px; background: var(--border); border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+  .tab { flex: 1; padding: 8px; border-radius: 8px; border: none; font-family: var(--font); font-size: 13px; font-weight: 600; cursor: pointer; background: transparent; color: var(--muted); transition: all .2s; }
+  .tab.active { background: var(--card); color: var(--primary); box-shadow: 0 1px 6px rgba(0,0,0,.1); }
+
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+  .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty p { font-size: 14px; }
+
+  .scroll-list { max-height: 280px; overflow-y: auto; }
+  .scroll-list::-webkit-scrollbar { width: 4px; }
+  .scroll-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 480px) {
+    .role-grid { grid-template-columns: 1fr; }
+    .timer-display { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <div class="topbar-logo">Exam<span>IA</span></div>
+    <div class="topbar-sub" id="topbar-sub">Sistema de Exámenes Inteligente</div>
+  </div>
+  <button class="topbar-mode" id="btn-back" onclick="goHome()" style="display:none;">⟵ Inicio</button>
+  <div class="topbar-profile" id="btn-profile" onclick="goProfile()" title="Perfil">👤</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modal-title">Confirmar</h3>
+    <p id="modal-body">¿Estás seguro?</p>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="modal-ok">Confirmar</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ HOME ═══════ -->
+<div class="screen active" id="screen-home">
+  <div style="text-align:center; padding: 30px 0 10px;">
+    <div style="font-size:64px;">📋</div>
+    <h1 style="font-size:28px; font-weight:800; color:var(--primary); margin:8px 0 4px;">ExamIA</h1>
+    <p style="color:var(--muted); font-size:14px;">Exámenes inteligentes con calificación por IA</p>
+  </div>
+
+  <p style="font-size:13px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin:20px 0 10px;">Ingresa como:</p>
+  <div class="role-grid" id="role-grid">
+    <div class="role-card" onclick="goStudent()">
+      <div class="icon">🧑‍💻</div>
+      <h3>Estudiante</h3>
+      <p>Ingresa tu código y responde el examen</p>
+    </div>
+    <div class="role-card" id="card-teacher" onclick="goTeacher()" style="display:none;">
+      <div class="icon">👩‍🏫</div>
+      <h3>Profesor</h3>
+      <p id="teacher-desc">Crea exámenes y califica con IA</p>
+    </div>
+  </div>
+  <div style="text-align:center; margin-top:16px;">
+    <button class="btn btn-ghost btn-sm" onclick="showAdminLogin()" style="font-size:12px; padding:6px 16px;">👩‍🏫 Acceso Profesores</button>
+  </div>
+</div>
+
+<!-- ═══════ TEACHER ═══════ -->
+<div class="screen" id="screen-teacher">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('t-create')">✏️ Crear</button>
+    <button class="tab" onclick="switchTab('t-active')">📡 Activos</button>
+    <button class="tab" onclick="switchTab('t-results')">📊 Resultados</button>
+    <button class="tab" onclick="switchTab('t-analysis')">🔍 Análisis de Respuestas</button>
+  </div>
+
+  <div id="t-create">
+    <div class="card">
+      <div class="card-title">📝 Datos del Examen</div>
+      <div class="field">
+        <label>Título del examen</label>
+        <input type="text" id="exam-title" placeholder="Ej: Matemáticas — Unidad 3">
+      </div>
+      <div class="field">
+        <label>Materia / Asignatura</label>
+        <input type="text" id="exam-subject" placeholder="Ej: Álgebra">
+      </div>
+      <div class="field">
+        <label>Instrucciones para el estudiante</label>
+        <textarea id="exam-instructions" placeholder="Responde con claridad y justifica cada respuesta..."></textarea>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="field">
+          <label>Tiempo (minutos)</label>
+          <input type="number" id="exam-time" value="60" min="1" max="300">
+        </div>
+        <div class="field">
+          <label>Grupo / Grado</label>
+          <input type="text" id="exam-group" placeholder="Ej: 10mo A">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">❓ Preguntas</div>
+      <div id="questions-list">
+        <div class="empty"><div class="icon">💭</div><p>Aún no hay preguntas</p></div>
+      </div>
+      <div class="divider"></div>
+      <div class="field">
+        <label>Nueva pregunta</label>
+        <textarea id="new-question" placeholder="Escribe la pregunta aquí..." rows="3"></textarea>
+      </div>
+      <div class="field">
+        <label>Tipo de respuesta esperada</label>
+        <select id="q-type">
+          <option value="abierta">Respuesta abierta (desarrollo)</option>
+          <option value="numerica">Numérica / Cálculo</option>
+          <option value="conceptual">Definición / Concepto</option>
+          <option value="analisis">Análisis / Opinión</option>
+        </select>
+      </div>
+      <button class="btn btn-accent btn-sm" onclick="addQuestion()">➕ Agregar pregunta</button>
+    </div>
+
+    <button class="btn btn-primary btn-block" onclick="publishExam()">
+      🚀 Publicar Examen
+    </button>
+    <button class="btn btn-success btn-block" onclick="saveAllAndGoHome()" style="margin-top:8px; margin-bottom:20px;">
+      💾 Guardar todo e Ir al Inicio
+    </button>
+  </div>
+
+  <div id="t-active" style="display:none;">
+    <div id="active-exams-list">
+      <div class="empty"><div class="icon">📭</div><p>No hay exámenes activos</p></div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title">📤 Compartir Examen</div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Descarga el examen como archivo JSON para que tus estudiantes lo importen en su dispositivo.</p>
+      <button class="btn btn-primary btn-sm" onclick="downloadAllExams()">📥 Descargar Todos los Exámenes (.json)</button>
+    </div>
+  </div>
+
+  <div id="t-results" style="display:none;">
+    <div class="card">
+      <div class="card-title">📊 Resultados Guardados</div>
+      <div style="margin-bottom:12px;">
+        <input type="file" id="import-results-file" accept=".json" style="margin-bottom:8px; font-size:13px;">
+        <button class="btn btn-ghost btn-sm" onclick="importResults()">📥 Importar Resultados</button>
+      </div>
+      <div id="results-container">
+        <div class="empty"><div class="icon">📈</div><p>Aún no hay resultados</p></div>
+      </div>
+    </div>
+    <button class="btn btn-success btn-block" onclick="exportExcel()">
+      📥 Exportar a Excel
+    </button>
+  </div>
+
+  <div id="t-analysis" style="display:none;">
+    <div class="card">
+      <div class="card-title">🔍 Análisis de Respuestas por Estudiante</div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px; font-weight:600; color:var(--muted); margin-bottom:6px; display:block;">Filtrar por:</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <select id="filter-provincia" onchange="filterAnalysis()">
+            <option value="">Todas las provincias</option>
+          </select>
+          <select id="filter-municipio" onchange="filterAnalysis()">
+            <option value="">Todos los municipios</option>
+          </select>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+          <select id="filter-grupo" onchange="filterAnalysis()">
+            <option value="">Todos los grupos</option>
+          </select>
+          <select id="filter-numero" onchange="filterAnalysis()">
+            <option value="">Todos los números</option>
+          </select>
+        </div>
+      </div>
+      <div id="analysis-container">
+        <div class="empty"><div class="icon">📊</div><p>Selecciona filtros para ver respuestas</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ STUDENT — ENTER CODE ═══════ -->
+<div class="screen" id="screen-student-enter">
+  <div style="text-align:center; padding:24px 0 16px;">
+    <div style="font-size:48px;">🎓</div>
+    <h2 style="font-size:20px; font-weight:700; color:var(--primary);">Sala del Estudiante</h2>
+    <p style="font-size:13px; color:var(--muted); margin-top:4px;">Ingresa el código que te dio tu profesor</p>
+  </div>
+
+  <div class="card" style="border:2px dashed var(--warn); background:#fff8f0;">
+    <div class="card-title">📥 Importar Examen</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:8px;">Si tu profesor te compartió un archivo <strong>.json</strong>, impórtalo aquí:</p>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input type="file" id="student-import-file" accept=".json" style="flex:1; font-size:13px;">
+      <button class="btn btn-warn btn-sm" onclick="studentImportExam()">📤 Importar</button>
+    </div>
+    <div id="import-status" style="font-size:12px; color:var(--muted); margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔐 Código de Examen</div>
+    <div class="field">
+      <label>Código (6 caracteres)</label>
+      <input type="text" id="student-code" placeholder="ABC123" maxlength="6"
+        style="text-align:center; font-family:var(--mono); font-size:28px; letter-spacing:6px; text-transform:uppercase;">
+    </div>
+    <button class="btn btn-accent btn-block" onclick="loadExam()">🔍 Buscar Examen</button>
+    <div id="available-exams" style="font-size:11px; color:var(--muted); margin-top:8px; text-align:center;"></div>
+  </div>
+
+  <div class="card" id="student-info-card" style="display:none;">
+    <div class="card-title">👤 Tus Datos</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+      <div class="field" style="grid-column:1/-1;">
+        <label>Nombre completo</label>
+        <input type="text" id="stu-name" placeholder="Nombre y apellidos">
+      </div>
+      <div class="field">
+        <label>Municipio</label>
+        <input type="text" id="stu-municipio" placeholder="Municipio">
+      </div>
+      <div class="field">
+        <label>Provincia</label>
+        <input type="text" id="stu-provincia" placeholder="Provincia">
+      </div>
+      <div class="field">
+        <label>Grupo</label>
+        <input type="text" id="stu-grupo" placeholder="Ej: 10mo A">
+      </div>
+      <div class="field">
+        <label>Número de lista</label>
+        <input type="number" id="stu-numero" placeholder="Ej: 15" min="1">
+      </div>
+    </div>
+    <div id="exam-preview" style="background:var(--paper); border-radius:10px; padding:14px; margin-bottom:14px;"></div>
+    <button class="btn btn-primary btn-block" onclick="startExam()">✅ Comenzar Examen</button>
+  </div>
+</div>
+
+<!-- ═══════ STUDENT — TAKING EXAM ═══════ -->
+<div class="screen" id="screen-student-exam">
+  <div class="card" style="background:linear-gradient(135deg,var(--primary),#283593); color:#fff; border:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div id="exam-running-title" style="font-size:16px; font-weight:700;"></div>
+        <div id="exam-running-subject" style="font-size:12px; opacity:.75; margin-top:2px;"></div>
+      </div>
+      <div>
+        <div class="timer-display" id="timer-display" style="padding:8px; font-size:32px; color:#fff;">00:00</div>
+      </div>
+    </div>
+    <div class="progress-bar" style="margin-top:10px;">
+      <div class="progress-fill" id="timer-progress" style="width:100%;"></div>
+    </div>
+  </div>
+  <div id="exam-answers-container"></div>
+  <button class="btn btn-warn btn-block" onclick="confirmSubmit()" style="margin-bottom:24px;">
+    📤 Enviar Respuestas
+  </button>
+</div>
+
+<!-- ═══════ STUDENT — RESULT ═══════ -->
+<div class="screen" id="screen-student-result">
+  <div class="card" style="text-align:center;">
+    <div style="font-size:14px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">Tu calificación</div>
+    <div class="score-circle" id="result-circle"></div>
+    <div id="result-grade-text" style="font-size:18px; font-weight:700; margin:8px 0;"></div>
+    <div id="result-name" style="font-size:14px; color:var(--muted);"></div>
+  </div>
+  <div id="result-feedback-list"></div>
+  <div class="card" style="background:#e8f5e9; border:1px solid var(--success);">
+    <div style="font-size:13px; color:var(--success); text-align:center; line-height:1.6;">
+      ✅ Tus respuestas han sido registradas.<br>
+      <strong>Descarga tus resultados</strong> para enviarlos a tu profesor.
+    </div>
+    <button class="btn btn-success btn-sm btn-block" onclick="downloadMyResults()" style="margin-top:10px;">
+      📥 Descargar Mis Resultados (.json)
+    </button>
+  </div>
+  <button class="btn btn-ghost btn-block" onclick="goHome()" style="margin-bottom:24px;">
+    🏠 Volver al inicio
+  </button>
+</div>
+
+<!-- ═══════ PROFILE ═══════ -->
+<div class="screen" id="screen-profile">
+  <div style="text-align:center; padding:20px 0 10px;">
+    <div style="font-size:48px;">👤</div>
+    <h2 style="font-size:20px; font-weight:700; color:var(--primary);">Perfil</h2>
+  </div>
+
+  <div class="card" id="profile-admin-section" style="display:none;">
+    <div class="card-title">🤖 Configuración de IA — Gemini</div>
+    <div class="field">
+      <label>API Key de Google Gemini</label>
+      <input type="password" id="gemini-key" placeholder="AIza..." value="">
+    </div>
+    <div class="field">
+      <label>Modelo de Gemini</label>
+      <select id="gemini-model">
+        <option value="gemini-3.5-flash">Gemini 3.5 Flash (rápido, gratuito)</option>
+        <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (económico, ligero)</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="saveApiKey()">💾 Guardar clave</button>
+      <button class="btn btn-accent btn-sm" onclick="testApiKey()">🔍 Probar clave</button>
+    </div>
+    <div id="api-test-result" style="font-size:12px; color:var(--muted); margin-top:8px;">
+      Obtén tu clave gratis en <strong>aistudio.google.com</strong>
+    </div>
+  </div>
+
+  <div class="card" id="profile-cloud-section" style="display:none;">
+    <div class="card-title">☁️ Almacenamiento en la Nube (Cloud)</div>
+    <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Usa la nube para que tus alumnos accedan a los exámenes desde cualquier lugar.</p>
+    <div class="field">
+      <label>ID de la Nube (Cloud Bin ID)</label>
+      <input type="text" id="cloud-bin-id" placeholder="Ej: 65f..." value="">
+    </div>
+    <div class="field">
+      <label>API Key de la Nube (Opcional)</label>
+      <input type="password" id="cloud-api-key" placeholder="X-Master-Key..." value="">
+    </div>
+    <button class="btn btn-primary btn-sm btn-block" onclick="saveCloudConfig()">💾 Guardar Configuración de Nube</button>
+    <div id="cloud-status" style="font-size:12px; color:var(--muted); margin-top:8px; text-align:center;">Modo Local Activo</div>
+  </div>
+
+  <div class="card" id="profile-admin-section2" style="display:none;">
+    <div class="card-title">👩‍🏫 Gestionar Profesores</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Autoriza a otros usuarios para crear exámenes. Ellos deben ingresar su nombre para tener acceso.</p>
+    <div class="field">
+      <label>Nombre del nuevo profesor</label>
+      <input type="text" id="new-teacher-name" placeholder="Nombre completo">
+    </div>
+    <button class="btn btn-accent btn-sm btn-block" onclick="addTeacher()">➕ Autorizar Profesor</button>
+    <div id="teachers-list" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ℹ️ Información</div>
+    <div id="profile-info" style="font-size:13px; color:var(--muted); line-height:1.6;"></div>
+  </div>
+
+  <div class="card" id="profile-login-section" style="display:none;">
+    <div class="card-title">🔐 Acceso de Administrador</div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Ingresa el PIN de administrador para acceder a las funciones avanzadas.</p>
+    <div class="field">
+      <label>PIN de Administrador</label>
+      <input type="password" id="admin-pin-input" placeholder="****" maxlength="8"
+        style="text-align:center; font-family:var(--mono); font-size:20px; letter-spacing:4px;">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="loginAdmin()">🔓 Entrar</button>
+    <div style="font-size:12px; color:var(--muted); margin-top:8px; text-align:center;" id="pin-hint"></div>
+  </div>
+  <div style="text-align:center; margin-top:16px;">
+    <button class="btn btn-primary btn-block" onclick="goHome()">🏠 Inicio</button>
+  </div>
+</div>
+
+<!-- ═══════ JAVASCRIPT ═══════ -->
+<script>
+// ── STATE ──
+let questions = [];
+let publishedExams = JSON.parse(localStorage.getItem('exams') || '{}');
+let allResults = JSON.parse(localStorage.getItem('results') || '[]');
+let currentExam = null;
+let timerInterval = null;
+let timeLeft = 0;
+let totalTime = 0;
+let studentInfo = {};
+let adminSessionActive = false;
+
+// ── AUTH STATE ──
+function getAuth() {
+  return JSON.parse(localStorage.getItem('examia_auth') || '{"role":"none","name":""}');
+}
+function setAuth(role, name) {
+  localStorage.setItem('examia_auth', JSON.stringify({ role, name }));
+}
+function getAdminPin() {
+  return localStorage.getItem('examia_admin_pin') || '';
+}
+function setAdminPin(pin) {
+  localStorage.setItem('examia_admin_pin', pin);
+}
+function getTeachers() {
+  return JSON.parse(localStorage.getItem('examia_teachers') || '[]');
+}
+function setTeachers(list) {
+  localStorage.setItem('examia_teachers', JSON.stringify(list));
+}
+
+// ── NAVIGATION ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const isHome = id === 'screen-home' || id === 'screen-profile';
+  document.getElementById('btn-back').style.display = isHome ? 'none' : 'inline-flex';
+}
+
+function goHome() {
+  clearInterval(timerInterval);
+  showScreen('screen-home');
+  document.getElementById('topbar-sub').textContent = 'Sistema de Exámenes Inteligente';
+  updateTeacherCard();
+}
+
+function goTeacher() {
+  if (!adminSessionActive) {
+    toast('⚠️ Debes ingresar el PIN de administrador primero.');
+    showAdminLogin();
+    return;
+  }
+  const auth = getAuth();
+  if (auth.role !== 'admin' && auth.role !== 'teacher') {
+    toast('⚠️ Acceso restringido. Solo profesores autorizados.');
+    return;
+  }
+  showScreen('screen-teacher');
+  document.getElementById('topbar-sub').textContent = 'Panel del Profesor';
+  renderActiveExams();
+  renderResults();
+}
+
+function goStudent() {
+  showScreen('screen-student-enter');
+  document.getElementById('topbar-sub').textContent = 'Sala del Estudiante';
+  document.getElementById('student-info-card').style.display = 'none';
+  document.getElementById('student-code').value = '';
+  showAvailableExams();
+}
+
+function goProfile() {
+  showScreen('screen-profile');
+  document.getElementById('topbar-sub').textContent = 'Perfil';
+  const auth = getAuth();
+  const pin = getAdminPin();
+
+  document.getElementById('profile-info').innerHTML = `
+    <p><strong>Rol actual:</strong> ${auth.role === 'admin' ? '👑 Administrador' : auth.role === 'teacher' ? '👩‍🏫 Profesor: ' + auth.name : '🧑‍💻 Estudiante'}</p>
+    <p style="margin-top:6px;"><strong>API Key:</strong> ${getApiKey() ? '✅ Configurada' : '❌ No configurada'}</p>
+    <p style="margin-top:6px;"><strong>Exámenes:</strong> ${Object.keys(publishedExams).length} publicados</p>
+    <p style="margin-top:6px;"><strong>Resultados:</strong> ${allResults.length} guardados</p>
+  `;
+
+  const isAdmin = auth.role === 'admin';
+  const hasPin = !!pin;
+  document.getElementById('profile-admin-section').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('profile-admin-section2').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('profile-cloud-section').style.display = isAdmin ? 'block' : 'none';
+  document.getElementById('profile-login-section').style.display = (!isAdmin && !hasPin) ? 'block' : 'none';
+
+  if (!isAdmin && !hasPin) {
+    document.getElementById('pin-hint').innerHTML = '💡 Si es tu primera vez, establece un PIN de administrador para controlar el acceso.';
+  }
+
+  if (isAdmin) {
+    const el = document.getElementById('gemini-key');
+    el.value = getApiKey();
+    const modelSelect = document.getElementById('gemini-model');
+    const savedModel = getGeminiModel();
+    if (modelSelect) modelSelect.value = savedModel;
+    
+    // Cargar Configuración de Nube
+    const cloud = getCloudConfig();
+    document.getElementById('cloud-bin-id').value = cloud.binId;
+    document.getElementById('cloud-api-key').value = cloud.apiKey;
+    updateCloudStatus();
+    
+    renderTeachersList();
+  }
+}
+
+function showAdminLogin() {
+  const storedPin = getAdminPin();
+  const teachers = getTeachers();
+  document.getElementById('modal-title').textContent = '🔐 Acceso Profesores';
+  document.getElementById('modal-body').innerHTML = `
+    <div style="margin-bottom:14px;">
+      <p style="font-size:13px; color:var(--muted); margin-bottom:8px;">Accede como administrador con el PIN:</p>
+      <input type="password" id="modal-pin-input" placeholder="PIN de administrador" maxlength="8"
+        style="text-align:center; font-family:var(--mono); font-size:20px; letter-spacing:4px; width:100%; padding:10px; border:1.5px solid var(--border); border-radius:10px;">
+    </div>
+    ${teachers.length ? `
+    <div style="text-align:center; margin:6px 0; font-size:12px; color:var(--muted);">— o —</div>
+    <div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:8px;">O ingresa tu nombre si eres profesor autorizado:</p>
+      <select id="modal-teacher-select" style="width:100%; padding:10px; border:1.5px solid var(--border); border-radius:10px; font-family:var(--font); font-size:14px;">
+        <option value="">Selecciona tu nombre...</option>
+        ${teachers.map(t => '<option value="' + t + '">' + t + '</option>').join('')}
+      </select>
+    </div>` : ''}
+    ${!storedPin ? '<div style="background:#fff3e0; border-radius:8px; padding:10px; margin-top:10px; font-size:12px; color:var(--warn);">⚠️ No hay PIN de administrador configurado. Ve a Perfil para establecerlo.</div>' : ''}
+  `;
+  document.getElementById('modal-ok').textContent = '🔓 Entrar';
+  document.getElementById('modal-ok').onclick = () => {
+    const pinInput = document.getElementById('modal-pin-input');
+    const teacherSelect = document.getElementById('modal-teacher-select');
+    if (pinInput && pinInput.value.trim() && pinInput.value === storedPin) {
+      setAuth('admin', 'Administrador');
+      adminSessionActive = true;
+      updateTeacherCard();
+      closeModal();
+      toast('✅ Acceso concedido. Ahora puedes usar el panel del profesor.');
+      return;
+    }
+    if (teacherSelect && teacherSelect.value) {
+      setAuth('teacher', teacherSelect.value);
+      adminSessionActive = true;
+      updateTeacherCard();
+      closeModal();
+      toast('✅ Bienvenido, Profesor ' + teacherSelect.value);
+      return;
+    }
+    if (!storedPin) {
+      toast('⚠️ No hay PIN configurado. Ve a Perfil para establecerlo.');
+      goProfile();
+      closeModal();
+      return;
+    }
+    toast('❌ PIN incorrecto o selecciona tu nombre');
+  };
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => {
+    const inp = document.getElementById('modal-pin-input');
+    if (inp) inp.focus();
+  }, 100);
+}
+
+function updateTeacherCard() {
+  const card = document.getElementById('card-teacher');
+  const desc = document.getElementById('teacher-desc');
+  if (adminSessionActive) {
+    card.style.display = 'block';
+    card.classList.remove('locked');
+    const auth = getAuth();
+    desc.textContent = auth.role === 'admin' ? 'Acceso completo como Administrador' : 'Crea exámenes y califica';
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+// ── AUTH: ADMIN LOGIN ──
+function loginAdmin() {
+  const pinInput = document.getElementById('admin-pin-input').value.trim();
+  const storedPin = getAdminPin();
+
+  if (!storedPin) {
+    if (pinInput.length < 4) {
+      toast('⚠️ El PIN debe tener al menos 4 caracteres');
+      return;
+    }
+    setAdminPin(pinInput);
+    setAuth('admin', 'Administrador');
+    adminSessionActive = true;
+    toast('✅ PIN establecido. Ahora eres Administrador');
+    goProfile();
+    updateTeacherCard();
+    return;
+  }
+
+  if (pinInput !== storedPin) {
+    toast('❌ PIN incorrecto');
+    return;
+  }
+
+  setAuth('admin', 'Administrador');
+  adminSessionActive = true;
+  toast('✅ Acceso de administrador concedido');
+  goProfile();
+  updateTeacherCard();
+}
+
+function addTeacher() {
+  const name = document.getElementById('new-teacher-name').value.trim();
+  if (!name) { toast('⚠️ Ingresa el nombre del profesor'); return; }
+  const teachers = getTeachers();
+  if (teachers.includes(name)) { toast('⚠️ Ya está autorizado'); return; }
+  teachers.push(name);
+  setTeachers(teachers);
+  document.getElementById('new-teacher-name').value = '';
+  renderTeachersList();
+  toast('✅ Profesor autorizado: ' + name);
+}
+
+function removeTeacher(name) {
+  let teachers = getTeachers();
+  teachers = teachers.filter(t => t !== name);
+  setTeachers(teachers);
+  renderTeachersList();
+  toast('🗑️ Profesor removido: ' + name);
+}
+
+function renderTeachersList() {
+  const el = document.getElementById('teachers-list');
+  const teachers = getTeachers();
+  if (!teachers.length) {
+    el.innerHTML = '<div style="font-size:13px; color:var(--muted); text-align:center;">No hay profesores autorizados</div>';
+    return;
+  }
+  el.innerHTML = teachers.map(t => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+      <span style="font-size:14px;">👩‍🏫 ${t}</span>
+      <button class="btn btn-danger btn-sm" style="padding:4px 10px; font-size:11px;" onclick="removeTeacher('${t.replace(/'/g, "\\'")}')">✕</button>
+    </div>
+  `).join('');
+}
+
+function enterAsTeacher() {
+  const auth = getAuth();
+  if (auth.role === 'admin' || auth.role === 'teacher') {
+    goTeacher();
+    return;
+  }
+  const teachers = getTeachers();
+  if (!teachers.length) {
+    toast('⚠️ No hay profesores autorizados. Ve a Perfil para configurar.');
+    goProfile();
+    return;
+  }
+  const name = prompt('Ingresa tu nombre de profesor autorizado:');
+  if (!name) return;
+  if (teachers.includes(name.trim())) {
+    setAuth('teacher', name.trim());
+    toast('✅ Bienvenido, Profesor ' + name.trim());
+    goTeacher();
+  } else {
+    toast('❌ No estás autorizado como profesor');
+  }
+}
+
+// ── API KEY Y MODELO ──
+function saveApiKey() {
+  const key = document.getElementById('gemini-key').value.trim();
+  const model = document.getElementById('gemini-model').value;
+  if (!key) { toast('⚠️ Ingresa una clave válida'); return; }
+  localStorage.setItem('gemini_key', key);
+  localStorage.setItem('gemini_model', model);
+  toast('✅ Configuración guardada');
+}
+
+function getApiKey() {
+  return localStorage.getItem('gemini_key') || '';
+}
+
+function getGeminiModel() {
+  return localStorage.getItem('gemini_model') || 'gemini-3.5-flash';
+}
+
+function testApiKey() {
+  const key = document.getElementById('gemini-key').value.trim() || getApiKey();
+  const model = document.getElementById('gemini-model')?.value || getGeminiModel();
+  const el = document.getElementById('api-test-result');
+  if (!key) {
+    el.innerHTML = '<span style="color:var(--danger);">⚠️ Escribe una API Key primero</span>';
+    toast('⚠️ No hay API Key');
+    return;
+  }
+  el.innerHTML = '<span style="color:var(--muted);">🔄 Probando ' + model + '...</span>';
+  toast('🔄 Probando...');
+  fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + key, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: 'Responde solo: OK' }] }], generationConfig: { temperature: 0, maxOutputTokens: 10 } })
+  })
+  .then(async r => {
+    if (!r.ok) {
+      let body;
+      try { body = await r.json(); } catch(_) { body = {}; }
+      const msg = body.error?.message || body.error || 'HTTP ' + r.status;
+      let hint = '';
+      if (r.status === 403 || msg.includes('API_KEY_INVALID') || msg.includes('PERMISSION_DENIED') || msg.includes('not enabled')) {
+        hint = '<br><span style="font-size:11px; display:block; margin-top:6px;">🔑 Ve a <strong>aistudio.google.com</strong> y crea una nueva API Key <strong>sin restricciones</strong>. Luego en <strong>console.cloud.google.com/apis/library/generativelanguage.googleapis.com</strong> habilita la <strong>Generative Language API</strong>.</span>';
+      } else if (r.status === 429 || msg.includes('quota')) {
+        hint = '<br><span style="font-size:11px; display:block; margin-top:6px;">⏳ Límite alcanzado. Espera un minuto.</span>';
+      } else if (msg.includes('Failed to fetch')) {
+        hint = '<br><span style="font-size:11px; display:block; margin-top:6px;">🌐 Error de red. Abre la página con un servidor HTTP (ej: <strong>npx serve</strong>).</span>';
+      }
+      throw { message: msg, hint: hint };
+    }
+    return r.json();
+  })
+  .then(d => {
+    const t = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    el.innerHTML = t.includes('OK')
+      ? '<span style="color:var(--success);">✅ ' + model + ' funciona correctamente</span>'
+      : '<span style="color:var(--warn);">⚠️ Respuesta: ' + t.slice(0,60) + '</span>';
+    toast(t.includes('OK') ? '✅ Conexión exitosa' : '⚠️ Respuesta inesperada');
+  })
+  .catch(e => {
+    const msg = e.message || String(e);
+    const hint = e.hint || '';
+    el.innerHTML = '<span style="color:var(--danger);">❌ ' + msg.slice(0,200) + '</span>' + hint;
+    toast('❌ Error: ' + msg.slice(0,80));
+  });
+}
+
+// ── NUBE (npoint.io) ──
+function saveCloudConfig() {
+  const binId = document.getElementById('cloud-bin-id').value.trim();
+  if (!binId) { toast('⚠️ Ingresa el ID de la nube'); return; }
+  localStorage.setItem('cloud_bin_id', binId);
+  toast('✅ Configuración de nube guardada');
+  updateCloudStatus();
+}
+
+function getCloudConfig() {
+  return {
+    binId: localStorage.getItem('cloud_bin_id') || '859d21163290c8a4783',
+    apiKey: '' // No necesaria en npoint
+  };
+}
+
+function updateCloudStatus() {
+  const config = getCloudConfig();
+  const el = document.getElementById('cloud-status');
+  if (!el) return;
+  if (config.binId) {
+    el.innerHTML = '☁️ <strong>Modo Nube Activo</strong> (ID: ' + config.binId.substring(0, 6) + '...)';
+    el.style.color = 'var(--success)';
+  } else {
+    el.innerHTML = 'Modo Local Activo';
+    el.style.color = 'var(--muted)';
+  }
+}
+
+async function cloudFetch() {
+  const { binId } = getCloudConfig();
+  if (!binId) throw new Error('La nube no está configurada');
+  
+  const url = `https://api.npoint.io/${binId}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Error de nube: ${res.status}`);
+  return await res.json();
+}
+
+async function cloudUpdate(newData) {
+  const { binId } = getCloudConfig();
+  if (!binId) throw new Error('La nube no está configurada');
+  
+  const url = `https://api.npoint.io/${binId}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newData)
+  });
+  if (!res.ok) throw new Error(`Error al actualizar nube: ${res.status}`);
+  return await res.json();
+}
+
+// ── GUARDAR TODO E IR AL INICIO ──
+function saveAllAndGoHome() {
+  const draft = {
+    title: document.getElementById('exam-title').value.trim(),
+    subject: document.getElementById('exam-subject').value.trim(),
+    instructions: document.getElementById('exam-instructions').value.trim(),
+    group: document.getElementById('exam-group').value.trim(),
+    time: parseInt(document.getElementById('exam-time').value) || 60,
+    questions: [...questions],
+    savedAt: new Date().toISOString()
+  };
+  localStorage.setItem('examia_draft', JSON.stringify(draft));
+  toast('✅ Datos guardados');
+  goHome();
+}
+
+// ── TABS ──
+async function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#screen-teacher > div[id^="t-"]').forEach(d => d.style.display = 'none');
+  document.getElementById(tab).style.display = 'block';
+  event.target.classList.add('active');
+
+  if (tab === 't-active') { renderActiveExams(); }
+  
+  if (tab === 't-results' || tab === 't-analysis') {
+    const { binId } = getCloudConfig();
+    if (binId) {
+      try {
+        const library = await cloudFetch();
+        if (library.results) {
+          allResults = library.results;
+          localStorage.setItem('results', JSON.stringify(allResults));
+        }
+      } catch (e) {
+        console.error('Cloud results sync error:', e);
+      }
+    }
+    if (tab === 't-results') renderResults();
+    if (tab === 't-analysis') renderAnalysis();
+  }
+}
+
+// ── QUESTIONS ──
+function addQuestion() {
+  const text = document.getElementById('new-question').value.trim();
+  const type = document.getElementById('q-type').value;
+  if (!text) { toast('⚠️ Escribe la pregunta primero'); return; }
+  questions.push({ text, type, id: Date.now() });
+  document.getElementById('new-question').value = '';
+  renderQuestionsList();
+  toast('✅ Pregunta agregada');
+}
+
+function deleteQuestion(id) {
+  questions = questions.filter(q => q.id !== id);
+  renderQuestionsList();
+}
+
+function renderQuestionsList() {
+  const el = document.getElementById('questions-list');
+  if (!questions.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">💭</div><p>Aún no hay preguntas</p></div>';
+    return;
+  }
+  el.innerHTML = questions.map((q, i) => `
+    <div class="question-item">
+      <div class="question-num">Pregunta ${i+1} · <span class="badge badge-info">${q.type}</span></div>
+      <div class="question-text">${q.text}</div>
+      <button class="del-btn" onclick="deleteQuestion(${q.id})">🗑️</button>
+    </div>
+  `).join('');
+}
+
+// ── PUBLISH EXAM ──
+async function publishExam() {
+  const title = document.getElementById('exam-title').value.trim();
+  const subject = document.getElementById('exam-subject').value.trim();
+  const time = parseInt(document.getElementById('exam-time').value);
+  const group = document.getElementById('exam-group').value.trim();
+  const instructions = document.getElementById('exam-instructions').value.trim();
+
+  if (!title) { toast('⚠️ Falta el título'); return; }
+  if (!subject) { toast('⚠️ Falta la materia'); return; }
+  if (!questions.length) { toast('⚠️ Agrega al menos una pregunta'); return; }
+  if (!time || time < 1) { toast('⚠️ Tiempo inválido'); return; }
+
+  const auth = getAuth();
+  const code = genCode();
+  const exam = {
+    code, title, subject, instructions, group, time,
+    questions: [...questions],
+    createdAt: new Date().toISOString(),
+    active: true,
+    createdBy: auth.name || 'Admin'
+  };
+
+  publishedExams[code] = exam;
+  localStorage.setItem('exams', JSON.stringify(publishedExams));
+
+  // Sincronizar con la Nube si está configurada
+  const { binId } = getCloudConfig();
+  if (binId) {
+    try {
+      toast('☁️ Sincronizando con la biblioteca en la nube...');
+      const library = await cloudFetch();
+      library.exams = library.exams || {};
+      library.exams[code] = exam;
+      await cloudUpdate(library);
+      toast('✅ Guardado en la nube');
+    } catch (e) {
+      console.error(e);
+      toast('⚠️ Error al subir a la nube, pero guardado localmente');
+    }
+  }
+
+  questions = [];
+  renderQuestionsList();
+  ['exam-title','exam-subject','exam-instructions','exam-group'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('exam-time').value = 60;
+
+  showShareModal(code, exam);
+}
+
+function showShareModal(code, exam) {
+  const { binId } = getCloudConfig();
+  const cloudInfo = binId ? `
+    <div style="background:#e3f2fd; border-radius:10px; padding:12px; margin-top:8px;">
+      <div style="font-size:12px; font-weight:700; color:#1565c0; margin-bottom:6px;">☁️ Acceso en la Nube Activado:</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Tus alumnos pueden acceder desde cualquier dispositivo usando solo el código.</div>
+      <div style="font-size:11px; color:var(--primary); text-align:center;">No es necesario enviar el archivo .json</div>
+    </div>
+  ` : `
+    <div style="background:#fff3e0; border-radius:10px; padding:12px; margin-top:8px;">
+      <div style="font-size:12px; font-weight:700; color:#e65100; margin-bottom:6px;">📥 Modo Local (Sin Nube):</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Descarga el archivo .json y envíalo por WhatsApp/correo. El estudiante lo importa en su app.</div>
+      <button class="btn btn-primary btn-sm btn-block" onclick="downloadExamJSON('${code}')">📥 Descargar Examen (.json)</button>
+    </div>
+  `;
+
+  document.getElementById('modal-title').textContent = '🎉 Examen Publicado';
+  document.getElementById('modal-body').innerHTML = `
+    <div style="text-align:center; margin-bottom:12px;">
+      <div style="font-size:13px; color:var(--muted);">Comparte este código con tus estudiantes</div>
+      <div style="font-family:var(--mono); font-size:42px; font-weight:800; letter-spacing:8px; color:var(--primary); margin:12px 0;">${code}</div>
+      <div style="font-size:13px; color:var(--muted);">${exam.title} · ${exam.time} min · ${exam.questions.length} preguntas</div>
+    </div>
+    ${cloudInfo}
+  `;
+  document.getElementById('modal-ok').textContent = '📋 Copiar código';
+  document.getElementById('modal-ok').onclick = () => { copyCode(code); closeModal(); };
+  document.getElementById('modal').classList.add('open');
+}
+
+function copyCode(code) {
+  navigator.clipboard.writeText(code).then(() => toast('✅ Código copiado: ' + code)).catch(() => toast('Código: ' + code));
+}
+
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let c = '';
+  for (let i = 0; i < 6; i++) c += chars[Math.floor(Math.random() * chars.length)];
+  return c;
+}
+
+// ── ACTIVE EXAMS ──
+function renderActiveExams() {
+  const el = document.getElementById('active-exams-list');
+  const exams = Object.values(publishedExams);
+  if (!exams.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📭</div><p>No hay exámenes publicados</p></div>';
+    return;
+  }
+  el.innerHTML = exams.map(e => `
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="font-size:16px; font-weight:700; color:var(--primary);">${e.title}</div>
+          <div style="font-size:13px; color:var(--muted); margin:4px 0;">${e.subject} · ${e.group||''}</div>
+          <div style="font-size:12px; color:var(--muted);">${e.questions.length} preguntas · ${e.time} min</div>
+        </div>
+        <span class="badge ${e.active ? 'badge-success':'badge-danger'}">${e.active?'Activo':'Cerrado'}</span>
+      </div>
+      <div style="margin:14px 0 10px; background:var(--paper); border-radius:10px; padding:12px; text-align:center;">
+        <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">CÓDIGO</div>
+        <div style="font-family:var(--mono); font-size:30px; font-weight:800; letter-spacing:6px; color:var(--primary);">${e.code}</div>
+      </div>
+       <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onclick="copyCode('${e.code}')">📋 Copiar código</button>
+        <button class="btn btn-primary btn-sm" onclick="downloadExamJSON('${e.code}')">📥 Descargar JSON</button>
+        <button class="btn btn-success btn-sm" onclick="showShareLinkModal('${e.code}')">🔗 Enviar Link</button>
+        <button class="btn btn-danger btn-sm" onclick="closeExam('${e.code}')">🔒 Cerrar</button>
+        <button class="btn btn-accent btn-sm" onclick="deleteExam('${e.code}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function closeExam(code) {
+  publishedExams[code].active = false;
+  localStorage.setItem('exams', JSON.stringify(publishedExams));
+  renderActiveExams();
+  toast('🔒 Examen cerrado');
+}
+
+function deleteExam(code) {
+  delete publishedExams[code];
+  localStorage.setItem('exams', JSON.stringify(publishedExams));
+  renderActiveExams();
+  toast('🗑️ Examen eliminado');
+}
+
+// ── STUDENT: LOAD EXAM ──
+async function loadExam() {
+  const code = document.getElementById('student-code').value.trim().toUpperCase();
+  if (code.length !== 6) { toast('⚠️ El código debe tener 6 caracteres'); return; }
+  
+  let exam = null;
+  const { binId } = getCloudConfig();
+
+  if (binId) {
+    try {
+      toast('☁️ Buscando en la biblioteca de la nube...');
+      const library = await cloudFetch();
+      exam = library.exams ? library.exams[code] : null;
+    } catch (e) {
+      console.error('Cloud load error:', e);
+      toast('⚠️ Error al conectar con la nube, buscando localmente...');
+    }
+  }
+
+  if (!exam) {
+    publishedExams = JSON.parse(localStorage.getItem('exams') || '{}');
+    exam = publishedExams[code];
+  }
+
+  if (!exam) {
+    const disp = Object.keys(publishedExams || {});
+    const msg = disp.length
+      ? '❌ Examen "' + code + '" no encontrado. Disponibles: ' + disp.join(', ')
+      : '❌ No hay exámenes. Ingresa un código válido o importa el archivo .json.';
+    toast(msg, 5000);
+    return;
+  }
+  if (!exam.active) { toast('🔒 Este examen ya fue cerrado'); return; }
+  currentExam = exam;
+  document.getElementById('student-info-card').style.display = 'block';
+  document.getElementById('exam-preview').innerHTML = `
+    <div style="font-size:15px; font-weight:700; color:var(--primary);">📋 ${exam.title}</div>
+    <div style="font-size:13px; color:var(--muted); margin:4px 0;">${exam.subject} · ${exam.time} min · ${exam.questions.length} preguntas</div>
+    ${exam.instructions ? '<div style="font-size:13px; margin-top:8px; padding:10px; background:#fff; border-radius:8px; border-left:3px solid var(--accent);">' + exam.instructions + '</div>' : ''}
+  `;
+  toast('✅ Examen encontrado');
+}
+
+function startExam() {
+  const name = document.getElementById('stu-name').value.trim();
+  const mun = document.getElementById('stu-municipio').value.trim();
+  const prov = document.getElementById('stu-provincia').value.trim();
+  const grupo = document.getElementById('stu-grupo').value.trim();
+  const numero = document.getElementById('stu-numero').value.trim();
+
+  if (!name) { toast('⚠️ Ingresa tu nombre completo'); return; }
+  if (!mun) { toast('⚠️ Ingresa tu municipio'); return; }
+  if (!prov) { toast('⚠️ Ingresa tu provincia'); return; }
+  if (!grupo) { toast('⚠️ Ingresa tu grupo'); return; }
+  if (!numero) { toast('⚠️ Ingresa tu número de lista'); return; }
+
+  studentInfo = { name, municipio: mun, provincia: prov, grupo, numero };
+
+  document.getElementById('exam-running-title').textContent = currentExam.title;
+  document.getElementById('exam-running-subject').textContent = currentExam.subject;
+
+  const container = document.getElementById('exam-answers-container');
+  
+  // Renderizar preguntas una a una
+  let questionsHTML = currentExam.questions.map((q, i) => `
+    <div class="answer-box ${i === 0 ? 'active' : ''}" id="ans-box-${i}">
+      <div class="q-label">Pregunta ${i+1} de ${currentExam.questions.length} · ${q.type}</div>
+      <div class="q-text" style="font-size:16px; font-weight:600; margin-bottom:15px;">${q.text}</div>
+      <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:2px solid var(--accent); border-radius:10px; cursor:pointer; background:#e8f5e9;" id="ans-opt-${i}-answer">
+          <input type="radio" name="ans-${i}-choice" value="answer" checked onchange="toggleAnswerInput(${i}, true)">
+          ✏️ Responder
+        </label>
+        <label style="flex:1; display:flex; align-items:center; gap:6px; padding:10px; border:2px solid var(--warn); border-radius:10px; cursor:pointer; background:#fff3e0;" id="ans-opt-${i}-skip">
+          <input type="radio" name="ans-${i}-choice" value="skip" onchange="toggleAnswerInput(${i}, false)">
+          ❌ No la sé resolver
+        </label>
+      </div>
+      <textarea id="ans-${i}" placeholder="Desarrolla tu respuesta aquí..." style="display:block; min-height:120px;"></textarea>
+    </div>
+  `).join('');
+
+  // Agregar controles de navegación
+  const navHTML = `
+    <div class="exam-nav">
+      <button class="btn btn-ghost btn-sm" id="btn-prev" onclick="prevQuestion()" ${currentExam.questions.length <= 1 ? 'style="display:none"' : ''}>⟵ Anterior</button>
+      <div class="exam-progress" id="exam-progress">Pregunta 1 de ${currentExam.questions.length}</div>
+      <button class="btn btn-primary btn-sm" id="btn-next" onclick="nextQuestion()">Siguiente ⟶</button>
+    </div>
+  `;
+
+  container.innerHTML = questionsHTML + navHTML;
+
+  showScreen('screen-student-exam');
+  document.getElementById('topbar-sub').textContent = currentExam.title;
+
+  totalTime = currentExam.time * 60;
+  timeLeft = totalTime;
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    updateTimerDisplay();
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      toast('⏰ ¡Tiempo agotado! Enviando...');
+      setTimeout(submitExam, 1500);
+    }
+  }, 1000);
+}
+
+function nextQuestion() {
+  const current = document.querySelector('.answer-box.active');
+  if (!current) return;
+  const idx = parseInt(current.id.split('-').pop());
+  if (idx < currentExam.questions.length - 1) {
+    current.classList.remove('active');
+    document.getElementById('ans-box-' + (idx + 1)).classList.add('active');
+    document.getElementById('exam-progress').textContent = 'Pregunta ' + (idx + 2) + ' de ' + currentExam.questions.length;
+    if (idx + 1 === currentExam.questions.length - 1) {
+      document.getElementById('btn-next').textContent = 'Finalizar 🏁';
+    } else {
+      document.getElementById('btn-next').textContent = 'Siguiente ⟶';
+    }
+  } else {
+    confirmSubmit();
+  }
+}
+
+function prevQuestion() {
+  const current = document.querySelector('.answer-box.active');
+  if (!current) return;
+  const idx = parseInt(current.id.split('-').pop());
+  if (idx > 0) {
+    current.classList.remove('active');
+    document.getElementById('ans-box-' + (idx - 1)).classList.add('active');
+    document.getElementById('exam-progress').textContent = 'Pregunta ' + idx + ' de ' + currentExam.questions.length;
+    document.getElementById('btn-next').textContent = 'Siguiente ⟶';
+  }
+}
+
+function updateTimerDisplay() {
+  const el = document.getElementById('timer-display');
+  const prog = document.getElementById('timer-progress');
+  const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const secs = (timeLeft % 60).toString().padStart(2, '0');
+  el.textContent = mins + ':' + secs;
+  prog.style.width = (timeLeft / totalTime * 100) + '%';
+  el.className = 'timer-display';
+  if (timeLeft <= 60) el.classList.add('danger');
+  else if (timeLeft <= totalTime * .2) el.classList.add('warning');
+}
+
+function toggleAnswerInput(index, show) {
+  const ta = document.getElementById('ans-' + index);
+  if (ta) {
+    ta.style.display = show ? 'block' : 'none';
+    ta.required = show;
+    if (!show) ta.value = '';
+  }
+}
+
+function confirmSubmit() {
+  const total = currentExam.questions.length;
+  let unanswered = 0;
+  for (let i = 0; i < total; i++) {
+    const choice = document.querySelector('input[name="ans-' + i + '-choice"]:checked');
+    if (!choice) unanswered++;
+    else if (choice.value === 'answer') {
+      const ta = document.getElementById('ans-' + i);
+      if (!ta || !ta.value.trim()) unanswered++;
+    }
+  }
+  const msg = unanswered > 0
+    ? '⚠️ ' + unanswered + ' pregunta(s) sin responder. Se enviarán igual como "(Sin respuesta)". ¿Confirmas?'
+    : '¿Deseas enviar tus respuestas ahora?';
+  document.getElementById('modal-title').textContent = '📤 Enviar respuestas';
+  document.getElementById('modal-body').textContent = msg;
+  document.getElementById('modal-ok').textContent = '✅ Sí, enviar';
+  document.getElementById('modal-ok').onclick = () => { closeModal(); submitExam(); };
+  document.getElementById('modal').classList.add('open');
+}
+
+// ── SUBMIT & GRADE ──
+async function submitExam() {
+  clearInterval(timerInterval);
+  showScreen('screen-student-result');
+  document.getElementById('topbar-sub').textContent = 'Calificando...';
+
+  const answers = currentExam.questions.map((q, i) => {
+    const choice = document.querySelector('input[name="ans-' + i + '-choice"]:checked');
+    const skipped = choice && choice.value === 'skip';
+    return {
+      question: q.text,
+      type: q.type,
+      skipped: skipped,
+      answer: skipped ? '(No la sé resolver)' : (document.getElementById('ans-'+i)?.value?.trim() || '(Sin respuesta)')
+    };
+  });
+
+  document.getElementById('result-circle').innerHTML = `
+    <div class="ai-loading" style="border-radius:50%; width:100%; height:100%; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px;">
+      <div style="display:flex; gap:4px;"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>
+      <div style="font-size:10px; color:var(--muted);">IA calificando</div>
+    </div>
+  `;
+  document.getElementById('result-grade-text').textContent = getGeminiModel() + ' está revisando tus respuestas...';
+  document.getElementById('result-name').textContent = studentInfo.name;
+  document.getElementById('result-feedback-list').innerHTML = '';
+
+  let grading;
+  try {
+    grading = await gradeWithGemini(answers, currentExam);
+  } catch(e) {
+    console.error('Error en calificación:', e);
+    grading = { score: null, grade: '', summary: '', feedback: [], error: e.message };
+    toast('⚠️ Error: ' + e.message);
+  }
+
+  displayResult(grading, answers);
+  await saveResult(grading, answers);
+
+  document.getElementById('topbar-sub').textContent = grading.score != null ? 'Nota: ' + grading.score.toFixed(1) + '/10' : 'Resultado';
+}
+
+async function gradeWithGemini(answers, exam) {
+  const apiKey = getApiKey();
+  const model = getGeminiModel();
+  if (!apiKey) throw new Error('No hay API Key de Gemini. Ve a Perfil y guarda una.');
+
+  const ptsPerQuestion = (10 / answers.length).toFixed(2);
+  const prompt = 'Eres un profesor experto. Califica este examen de "' + exam.subject + '". EXAMEN: ' + exam.title + '. INSTRUCCIONES: ' + (exam.instructions || 'Ninguna') + '.\n\nCada pregunta vale ' + ptsPerQuestion + ' puntos (total: 10 puntos).\n\nRESPUESTAS:\n' + answers.map((a, i) => 'Pregunta ' + (i+1) + ': ' + a.question + '\nEstado: ' + (a.skipped ? 'NO RESPONDIDA' : 'RESPONDIDA') + '\nRespuesta: ' + a.answer).join('\n\n') + '\n\nDevuelve SOLO JSON valido con este formato:\n{"score": numero_0_a_10, "grade": "Excelente|Muy Bien|Bien|Regular|Insuficiente", "summary": "resumen", "feedback": [{"question": 1, "pts_earned": numero, "pts_max": ' + ptsPerQuestion + ', "comment": "comentario"}]}';
+
+  let res;
+  try {
+    res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + apiKey, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: 2000 } })
+    });
+  } catch(e) { throw new Error('Error de red: ' + e.message); }
+
+  if (!res.ok) {
+    let errData;
+    try { errData = await res.json(); } catch(_) { errData = { error: { message: 'HTTP ' + res.status } }; }
+    const errMsg = errData.error?.message || ('Error HTTP ' + res.status);
+    if (res.status === 400) throw new Error('API Key inválida: ' + errMsg);
+    if (res.status === 403) throw new Error('API Key sin permisos. Habilita Generative Language API en Google Cloud.');
+    if (res.status === 429) throw new Error('Límite de solicitudes alcanzado. Espera un momento.');
+    throw new Error('Error Gemini: ' + errMsg);
+  }
+
+  const data = await res.json();
+  let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  text = text.replace(/```json|```/g, '').trim();
+  if (!text) throw new Error('Gemini devolvió respuesta vacía');
+  try { return JSON.parse(text); } catch(_) { throw new Error('Respuesta de Gemini no válida'); }
+}
+
+function displayResult(grading, answers) {
+  const score = grading.score;
+  const hasScore = score !== null && score !== undefined;
+
+  const circle = document.getElementById('result-circle');
+  const cls = !hasScore ? 'score-mid' : score >= 7 ? 'score-high' : score >= 5 ? 'score-mid' : 'score-low';
+  circle.className = 'score-circle ' + cls;
+  circle.textContent = hasScore ? score.toFixed(1) : '—';
+
+  document.getElementById('result-grade-text').textContent = grading.grade || (hasScore ? '' : 'Sin calificación');
+  document.getElementById('result-name').textContent = studentInfo.name + ' · ' + studentInfo.grupo + ' · #' + studentInfo.numero;
+
+  if (grading.summary) {
+    document.getElementById('result-feedback-list').innerHTML = `
+      <div class="card" style="margin-bottom:10px;">
+        <div class="card-title">🤖 Retroalimentación de la IA</div>
+        <p style="font-size:14px; line-height:1.6;">${grading.summary}</p>
+      </div>
+    `;
+  }
+
+  if (grading.feedback?.length) {
+    document.getElementById('result-feedback-list').innerHTML += grading.feedback.map(f => `
+      <div class="card" style="padding:14px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span style="font-size:13px; font-weight:700; color:var(--primary);">Pregunta ${f.question}</span>
+          <span class="badge ${f.pts_earned >= f.pts_max*.7 ? 'badge-success':'badge-warn'}">${f.pts_earned}/${f.pts_max} pts</span>
+        </div>
+        ${f.clave ? '<div style="font-size:11px; color:var(--muted); background:var(--paper); padding:8px; border-radius:6px; margin-bottom:8px;"><strong>📋 Clave de calificación:</strong> ' + f.clave + '</div>' : ''}
+        <p style="font-size:13px; color:var(--ink); line-height:1.5;">${f.comment}</p>
+      </div>
+    `).join('');
+  }
+}
+
+async function saveResult(grading, answers) {
+  const result = {
+    id: Date.now(),
+    examCode: currentExam.code,
+    examTitle: currentExam.title,
+    subject: currentExam.subject,
+    ...studentInfo,
+    score: grading.score,
+    grade: grading.grade || '',
+    summary: grading.summary || '',
+    answers: answers.map(a => ({ question: a.question, answer: a.answer, skipped: a.skipped })),
+    feedback: grading.feedback || [],
+    submittedAt: new Date().toISOString()
+  };
+  allResults.push(result);
+  localStorage.setItem('results', JSON.stringify(allResults));
+  
+  // Sincronizar resultado con la nube
+  const { binId } = getCloudConfig();
+  if (binId) {
+    try {
+      const library = await cloudFetch();
+      library.results = library.results || [];
+      library.results.push(result);
+      await cloudUpdate(library);
+      console.log('✅ Resultado guardado en la nube');
+    } catch (e) {
+      console.error('Error al guardar resultado en la nube:', e);
+    }
+  }
+
+  if (document.getElementById('results-container')) {
+    renderResults();
+  }
+  if (document.getElementById('analysis-container')) {
+    renderAnalysis();
+  }
+  window.dispatchEvent(new StorageEvent('storage', { key: 'results', newValue: JSON.stringify(allResults) }));
+  return result;
+}
+
+// ── DOWNLOAD STUDENT RESULTS ──
+function downloadMyResults() {
+  const myResults = allResults.filter(r => r.name === studentInfo.name && r.grupo === studentInfo.grupo);
+  if (!myResults.length) { toast('⚠️ No hay resultados para descargar'); return; }
+  const data = JSON.stringify(myResults, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Resultados_' + studentInfo.name.replace(/\s+/g, '_') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  localStorage.setItem('results', JSON.stringify(allResults));
+  if (document.getElementById('results-container')) {
+    renderResults();
+  }
+  if (document.getElementById('analysis-container')) {
+    renderAnalysis();
+  }
+  toast('✅ Resultados descargados. Ya están disponibles en el panel del profesor.');
+}
+
+// ── IMPORT RESULTS (Teacher) ──
+function importResults() {
+  const fileInput = document.getElementById('import-results-file');
+  const file = fileInput.files[0];
+  if (!file) { toast('⚠️ Selecciona un archivo JSON'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      const arr = Array.isArray(data) ? data : [data];
+      let count = 0;
+      arr.forEach(r => {
+        if (r.examCode && r.name) {
+          const exists = allResults.find(x => x.id === r.id);
+          if (!exists) { allResults.push(r); count++; }
+        }
+      });
+      localStorage.setItem('results', JSON.stringify(allResults));
+      fileInput.value = '';
+      renderResults();
+      toast('✅ ' + count + ' resultados importados');
+    } catch(err) {
+      toast('❌ Error: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ── RESULTS ──
+function renderResults() {
+  const el = document.getElementById('results-container');
+  if (!allResults.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📈</div><p>No hay resultados. Los estudiantes deben descargar sus resultados y compartírtelos.</p></div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Examen</th>
+            <th>Grupo</th>
+            <th>#</th>
+            <th>Nota</th>
+            <th>Calificación</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allResults.map(r => `
+            <tr>
+              <td>${r.name}</td>
+              <td style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.examTitle}</td>
+              <td>${r.grupo}</td>
+              <td>${r.numero}</td>
+              <td><strong style="color:${r.score>=7?'var(--success)':r.score>=5?'var(--warn)':'var(--danger)'};">${r.score?.toFixed(1)||'—'}</strong></td>
+              <td><span class="badge ${r.score>=7?'badge-success':r.score>=5?'badge-warn':'badge-danger'}">${r.grade||'—'}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ── ANÁLISIS DE RESPUESTAS ──
+function renderAnalysis() {
+  const el = document.getElementById('analysis-container');
+  if (!allResults.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📊</div><p>No hay resultados. Los estudiantes deben enviar sus exámenes primero.</p></div>';
+    populateFilters();
+    return;
+  }
+  populateFilters();
+  const filtered = applyFilters();
+  if (!filtered.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>No hay resultados con los filtros aplicados</p></div>';
+    return;
+  }
+  el.innerHTML = filtered.map(r => `
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+        <div>
+          <div style="font-size:16px; font-weight:700; color:var(--primary);">${r.name}</div>
+          <div style="font-size:13px; color:var(--muted);">${r.provincia} · ${r.municipio} · ${r.grupo} · #${r.numero}</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:4px;">${r.examTitle} · ${r.subject}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:14px; font-weight:700; color:${r.score>=7?'var(--success)':r.score>=5?'var(--warn)':'var(--danger)'};">Nota: ${r.score?.toFixed(1)||'—'}</div>
+          <select id="grade-${r.id}" onchange="updateGrade(${r.id}, this.value)" style="margin-top:4px; font-size:12px;">
+            <option value="">— Cambiar nota —</option>
+            <option value="10">10</option>
+            <option value="9.5">9.5</option>
+            <option value="9">9</option>
+            <option value="8.5">8.5</option>
+            <option value="8">8</option>
+            <option value="7.5">7.5</option>
+            <option value="7">7</option>
+            <option value="6.5">6.5</option>
+            <option value="6">6</option>
+            <option value="5">5</option>
+            <option value="4">4</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+            <option value="0">0</option>
+          </select>
+        </div>
+      </div>
+      <div style="background:var(--paper); border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="font-size:12px; font-weight:700; color:var(--primary); margin-bottom:8px;">📝 Respuestas:</div>
+        ${r.answers.map((a, idx) => `
+          <div style="margin-bottom:10px; padding:8px; background:#fff; border-radius:6px; border-left:3px solid var(--border);">
+            <div style="font-size:11px; color:var(--muted); margin-bottom:4px;">Pregunta ${idx+1}</div>
+            <div style="font-size:13px; color:var(--ink); margin-bottom:4px;">${a.question}</div>
+            <div style="font-size:12px; color:${a.skipped ? 'var(--danger)' : 'var(--ink)'}; padding:6px; background:${a.skipped ? '#ffebee' : '#e8f5e9'}; border-radius:4px;">
+              ${a.skipped ? '❌ No la supe resolver' : '✅ ' + a.answer}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      ${r.feedback?.length ? `
+      <div style="background:#e8f5e9; border-radius:8px; padding:12px;">
+        <div style="font-size:12px; font-weight:700; color:var(--success); margin-bottom:8px;">🤖 Retroalimentación de la IA:</div>
+        <div style="font-size:13px; color:var(--ink); line-height:1.5;">${r.summary}</div>
+        ${r.feedback.map(f => `
+          <div style="margin-top:8px; padding:8px; background:#fff; border-radius:6px; border-left:3px solid var(--accent);">
+            <div style="font-size:11px; color:var(--muted);">Pregunta ${f.question}: ${f.pts_earned}/${f.pts_max} pts</div>
+            ${f.clave ? '<div style="font-size:11px; color:var(--primary); margin-top:4px;"><strong>Clave:</strong> ' + f.clave + '</div>' : ''}
+            <div style="font-size:12px; color:var(--ink); margin-top:4px;">${f.comment}</div>
+          </div>
+        `).join('')}
+      </div>` : ''}
+      <div style="font-size:11px; color:var(--muted); text-align:right; margin-top:8px;">
+        Enviado: ${new Date(r.submittedAt).toLocaleString('es')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function populateFilters() {
+  const provincias = [...new Set(allResults.map(r => r.provincia).filter(Boolean))].sort();
+  const municipios = [...new Set(allResults.map(r => r.municipio).filter(Boolean))].sort();
+  const grupos = [...new Set(allResults.map(r => r.grupo).filter(Boolean))].sort();
+  const numeros = [...new Set(allResults.map(r => r.numero).filter(Boolean))].sort();
+
+  const provSel = document.getElementById('filter-provincia');
+  provSel.innerHTML = '<option value="">Todas las provincias</option>' + provincias.map(p => '<option value="' + p + '">' + p + '</option>').join('');
+
+  const munSel = document.getElementById('filter-municipio');
+  munSel.innerHTML = '<option value="">Todos los municipios</option>' + municipios.map(m => '<option value="' + m + '">' + m + '</option>').join('');
+
+  const grupoSel = document.getElementById('filter-grupo');
+  grupoSel.innerHTML = '<option value="">Todos los grupos</option>' + grupos.map(g => '<option value="' + g + '">' + g + '</option>').join('');
+
+  const numSel = document.getElementById('filter-numero');
+  numSel.innerHTML = '<option value="">Todos los números</option>' + numeros.map(n => '<option value="' + n + '">' + n + '</option>').join('');
+}
+
+function applyFilters() {
+  const provincia = document.getElementById('filter-provincia').value;
+  const municipio = document.getElementById('filter-municipio').value;
+  const grupo = document.getElementById('filter-grupo').value;
+  const numero = document.getElementById('filter-numero').value;
+
+  return allResults.filter(r => {
+    if (provincia && r.provincia !== provincia) return false;
+    if (municipio && r.municipio !== municipio) return false;
+    if (grupo && r.grupo !== grupo) return false;
+    if (numero && r.numero !== numero) return false;
+    return true;
+  });
+}
+
+function filterAnalysis() {
+  renderAnalysis();
+}
+
+function updateGrade(resultId, newScore) {
+  if (!newScore) return;
+  const result = allResults.find(r => r.id === resultId);
+  if (!result) { toast('❌ Resultado no encontrado'); return; }
+  result.score = parseFloat(newScore);
+  result.grade = newScore >= 7 ? 'Excelente' : newScore >= 5 ? 'Muy Bien' : newScore >= 3 ? 'Bien' : newScore >= 1 ? 'Regular' : 'Insuficiente';
+  localStorage.setItem('results', JSON.stringify(allResults));
+  toast('✅ Nota actualizada a ' + newScore);
+  renderAnalysis();
+}
+
+// ── EXPORT EXCEL ──
+function exportExcel() {
+  if (!allResults.length) { toast('⚠️ No hay resultados para exportar'); return; }
+  const rows = allResults.map(r => ({
+    'Código': r.examCode, 'Examen': r.examTitle, 'Materia': r.subject,
+    'Nombre': r.name, 'Municipio': r.municipio, 'Provincia': r.provincia,
+    'Grupo': r.grupo, '#': r.numero, 'Nota': r.score != null ? r.score : '',
+    'Calificación': r.grade, 'Resumen': r.summary,
+    ...Object.fromEntries(r.answers.map((a, i) => ['Respuesta P'+(i+1), a.answer || a])),
+    'Fecha': new Date(r.submittedAt).toLocaleString('es')
+  }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [14,24,14,24,14,14,12,6,8,12,36].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Resultados');
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'ExamIA_Resultados_' + date + '.xlsx');
+  toast('📥 Excel exportado');
+}
+
+// ── DOWNLOAD EXAMS ──
+function downloadExamJSON(code) {
+  const exam = publishedExams[code];
+  if (!exam) { toast('❌ Examen no encontrado'); return; }
+  const data = JSON.stringify(exam, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Examen_' + exam.code + '_' + exam.title.replace(/\s+/g, '_') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('✅ Examen descargado: ' + exam.code);
+}
+
+function downloadAllExams() {
+  const exams = Object.values(publishedExams);
+  if (!exams.length) { toast('⚠️ No hay exámenes para descargar'); return; }
+  exams.forEach(e => downloadExamJSON(e.code));
+}
+
+function studentImportExam() {
+  const fileInput = document.getElementById('student-import-file');
+  const file = fileInput.files[0];
+  if (!file) { toast('⚠️ Selecciona un archivo JSON'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const exam = JSON.parse(e.target.result);
+      if (!exam.code || !exam.title || !exam.questions) {
+        toast('❌ Archivo de examen inválido');
+        return;
+      }
+      publishedExams[exam.code] = exam;
+      localStorage.setItem('exams', JSON.stringify(publishedExams));
+      fileInput.value = '';
+      document.getElementById('import-status').innerHTML = '<span style="color:var(--success);">✅ Examen "' + exam.title + '" importado. Código: <strong>' + exam.code + '</strong></span>';
+      showAvailableExams();
+      toast('✅ Examen importado: ' + exam.code);
+    } catch(err) {
+      toast('❌ Error: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function showAvailableExams() {
+  publishedExams = JSON.parse(localStorage.getItem('exams') || '{}');
+  const codes = Object.keys(publishedExams);
+  const el = document.getElementById('available-exams');
+  if (codes.length) {
+    el.innerHTML = 'Exámenes disponibles: ' + codes.map(c => '<strong>' + c + '</strong>').join(', ');
+  } else {
+    el.innerHTML = 'No hay exámenes. Importa el archivo .json primero.';
+  }
+}
+
+// ── MODAL ──
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function showShareLinkModal(code) {
+  const exam = publishedExams[code];
+  if (!exam) { toast('❌ Examen no encontrado'); return; }
+  
+  // Construimos un link que pueda ser usado si el archivo está en un servidor o carpeta compartida
+  const baseUrl = window.location.href.split('?')[0].split('#')[0];
+  const shareUrl = baseUrl + '?student=1&code=' + code;
+  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent('📋 *Examen: ' + exam.title + '*\n🔐 *Código: ' + code + '*\n\nUsa este código en ExamIA para realizar tu examen.');
+  
+  document.getElementById('modal-title').textContent = '🔗 Compartir Examen: ' + exam.title;
+  document.getElementById('modal-body').innerHTML = `
+    <div style="text-align:center; margin-bottom:16px;">
+      <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">Código del examen</div>
+      <div style="font-family:var(--mono); font-size:32px; font-weight:800; letter-spacing:6px; color:var(--primary);">${code}</div>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <button class="btn btn-success btn-sm" style="flex:1;" onclick="window.open('${whatsappUrl}', '_blank')">📱 WhatsApp</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="copyToClipboard('${shareUrl}')">📋 Copiar Link</button>
+    </div>
+    <div style="font-size:12px; color:var(--muted); line-height:1.5;">
+      <strong>Instrucciones:</strong><br>
+      1. Envía el código <strong>${code}</strong> a tus estudiantes<br>
+      2. El link funciona si el alumno tiene el archivo ExamIA.html abierto<br>
+      3. El sistema registrará la nota automáticamente en tu panel.
+    </div>
+  `;
+  document.getElementById('modal-ok').textContent = 'Cerrar';
+  document.getElementById('modal-ok').onclick = closeModal;
+  document.getElementById('modal').classList.add('open');
+}
+
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    toast('✅ Link copiado al portapapeles');
+  }).catch(() => {
+    prompt('Copia este link:', text);
+  });
+}
+
+// ── TOAST ──
+function toast(msg, dur) {
+  dur = dur || 3000;
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ── RESTAURAR BORRADOR ──
+function restoreDraft() {
+  const draft = JSON.parse(localStorage.getItem('examia_draft') || 'null');
+  if (!draft || !draft.questions) return;
+  document.getElementById('exam-title').value = draft.title || '';
+  document.getElementById('exam-subject').value = draft.subject || '';
+  document.getElementById('exam-instructions').value = draft.instructions || '';
+  document.getElementById('exam-group').value = draft.group || '';
+  document.getElementById('exam-time').value = draft.time || 60;
+  questions = draft.questions || [];
+  renderQuestionsList();
+  localStorage.removeItem('examia_draft');
+}
+
+// ── INIT ──
+window.addEventListener('load', () => {
+  adminSessionActive = false;
+  updateTeacherCard();
+  if (window.location.protocol === 'file:') {
+    toast('⚠️ Abre desde un servidor HTTP para que funcione', 6000);
+  }
+  
+  // Manejar parámetros de URL para acceso directo al examen
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('code')) {
+    const code = params.get('code').toUpperCase();
+    document.getElementById('student-code').value = code;
+    
+    // Auto-llenar datos del alumno si vienen en la URL
+    if (params.has('name')) document.getElementById('stu-name').value = params.get('name');
+    if (params.has('mun')) document.getElementById('stu-municipio').value = params.get('mun');
+    if (params.has('prov')) document.getElementById('stu-provincia').value = params.get('prov');
+    if (params.has('grp')) document.getElementById('stu-grupo').value = params.get('grp');
+    if (params.has('num')) document.getElementById('stu-numero').value = params.get('num');
+
+    // Cargar examen automáticamente
+    setTimeout(() => {
+      loadExam();
+      // Si todos los datos están presentes, saltar directamente al examen
+      if (document.getElementById('stu-name').value && document.getElementById('stu-numero').value) {
+        startExam();
+      }
+    }, 500);
+  }
+  
+  // Escuchar cambios en localStorage para actualizar resultados en tiempo real
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'results') {
+      allResults = JSON.parse(e.newValue || '[]');
+      if (document.getElementById('results-container')) {
+        renderResults();
+      }
+      if (document.getElementById('analysis-container')) {
+        renderAnalysis();
+      }
+    }
+  });
+});
+</script>
+</body>
+</html>
