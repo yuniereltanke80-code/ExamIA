@@ -539,29 +539,27 @@
     </div>
   </div>
 
-  <div class="card" id="profile-cloud-section" style="display:none;">
-    <div class="card-title">☁️ Almacenamiento en la Nube (Cloud)</div>
-    <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Usa la nube para que tus alumnos accedan a los exámenes desde cualquier lugar.</p>
-    <div class="field">
-      <label>ID de la Nube (Cloud Bin ID)</label>
-      <input type="text" id="cloud-bin-id" placeholder="Ej: 65f..." value="">
+<div class="card" id="profile-cloud-section" style="display:none;">
+      <div class="card-title">☁️ Almacenamiento en la Nube (JSONBin.io)</div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Usa la nube para que tus alumnos accedan a los exámenes desde cualquier lugar.</p>
+      <div class="field">
+        <label>Bin ID</label>
+        <input type="text" id="cloud-bin-id" placeholder="Ej: 65f..." value="">
+      </div>
+      <div class="field">
+        <label>API Key (Master Key)</label>
+        <input type="password" id="cloud-api-key" placeholder="Tu Master Key de JSONBin.io" value="">
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveCloudConfig()">💾 Guardar</button>
+        <button class="btn btn-accent btn-sm" style="flex:1;" onclick="testCloudConnection()">🔍 Probar conexión</button>
+      </div>
+      <div id="cloud-status" style="font-size:12px; color:var(--muted); margin-top:8px; text-align:center;">Modo Local Activo</div>
+      <div id="cloud-test-result" style="font-size:12px; margin-top:6px; text-align:center;"></div>
+      <div style="background:#fff3e0; border-radius:8px; padding:10px; margin-top:10px; font-size:11px; color:var(--warn); line-height:1.4;">
+        <strong>⚠️ Configuración:</strong> En <a href="https://jsonbin.io" target="_blank">jsonbin.io</a> crea una cuenta → New Bin → copia el <strong>Bin ID</strong> y tu <strong>Master Key</strong> (Settings → API Keys).
+      </div>
     </div>
-    <div class="field">
-      <label>API Key de la Nube (Opcional)</label>
-      <input type="password" id="cloud-api-key" placeholder="X-Master-Key..." value="">
-    </div>
-    <div style="display:flex; gap:8px;">
-      <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveCloudConfig()">💾 Guardar</button>
-      <button class="btn btn-accent btn-sm" style="flex:1;" onclick="testCloudConnection()">🔍 Probar conexión</button>
-    </div>
-    <div id="cloud-status" style="font-size:12px; color:var(--muted); margin-top:8px; text-align:center;">Modo Local Activo</div>
-    <div id="cloud-test-result" style="font-size:12px; margin-top:6px; text-align:center;"></div>
-    <div style="background:#fff3e0; border-radius:8px; padding:10px; margin-top:10px; font-size:11px; color:var(--warn); line-height:1.4;">
-      <strong>⚠️ Importante:</strong> En npoint.io, al crear un "New Bin", obtienes un <strong>Write Token (token secreto)</strong>.
-      Copia ese token completo en el campo "ID de la Nube". No uses el ID público de lectura.
-      También debes inicializar el bin con al menos <code>{}</code> en la pestaña "Contents".
-    </div>
-  </div>
 
   <div class="card" id="profile-admin-section2" style="display:none;">
     <div class="card-title">👩‍🏫 Gestionar Profesores</div>
@@ -936,8 +934,11 @@ function testApiKey() {
 // ── NUBE (npoint.io) ──
 function saveCloudConfig() {
   const binId = document.getElementById('cloud-bin-id').value.trim();
-  if (!binId) { toast('⚠️ Ingresa el ID de la nube'); return; }
+  const apiKey = document.getElementById('cloud-api-key').value.trim();
+  if (!binId) { toast('⚠️ Ingresa el Bin ID'); return; }
+  if (!apiKey) { toast('⚠️ Ingresa la API Key (Master Key)'); return; }
   localStorage.setItem('cloud_bin_id', binId);
+  localStorage.setItem('cloud_api_key', apiKey);
   toast('✅ Configuración de nube guardada');
   updateCloudStatus();
 }
@@ -945,7 +946,7 @@ function saveCloudConfig() {
 function getCloudConfig() {
   return {
     binId: localStorage.getItem('cloud_bin_id') || '',
-    apiKey: '' // No necesaria en npoint
+    apiKey: localStorage.getItem('cloud_api_key') || ''
   };
 }
 
@@ -964,44 +965,46 @@ function updateCloudStatus() {
 
 async function testCloudConnection() {
   const binId = document.getElementById('cloud-bin-id').value.trim();
+  const apiKey = document.getElementById('cloud-api-key').value.trim();
   const resultEl = document.getElementById('cloud-test-result');
-  if (!binId) {
-    resultEl.innerHTML = '<span style="color:var(--danger)">⚠️ Ingresa un ID de nube primero</span>';
-    toast('⚠️ No hay ID de nube');
+  if (!binId || !apiKey) {
+    resultEl.innerHTML = '<span style="color:var(--danger)">⚠️ Ingresa Bin ID y API Key primero</span>';
+    toast('⚠️ Falta Bin ID o API Key');
     return;
   }
   resultEl.innerHTML = '<span style="color:var(--muted)">🔄 Probando conexión...</span>';
   try {
-    // Probar lectura
-    const readUrl = `https://api.npoint.io/${binId}`;
-    const readRes = await fetch(readUrl);
+    // Probar lectura con headers de JSONBin.io
+    const readUrl = `https://api.jsonbin.io/v3/b/${binId}`;
+    const readRes = await fetch(readUrl, {
+      headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' }
+    });
     if (readRes.status === 404) {
       // Bin existe pero vacío, intentar inicializarlo
       resultEl.innerHTML = '<span style="color:var(--warn)">⚠️ El bin existe pero está vacío. Inicializando...</span>';
       const writeRes = await fetch(readUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ exams: {}, results: [] })
       });
       if (writeRes.ok) {
         resultEl.innerHTML = '<span style="color:var(--success)">✅ Conexión exitosa! Bin inicializado correctamente.</span>';
         toast('✅ Nube configurada y funcionando');
       } else {
-        let extra = writeRes.status === 403 ? ' (el token no tiene permisos de escritura)' : '';
+        let extra = writeRes.status === 403 ? ' (API Key inválida o sin permisos)' : '';
         resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error de escritura: ${writeRes.status}${extra}</span>`;
         toast('❌ Error de escritura: ' + writeRes.status);
       }
     } else if (readRes.ok) {
       const data = await readRes.json();
-      // Verificar que tenga la estructura correcta
-      if (data && typeof data === 'object') {
+      if (data && data.record && typeof data.record === 'object') {
         resultEl.innerHTML = '<span style="color:var(--success)">✅ Conexión exitosa! Bin accesible.</span>';
         toast('✅ Conexión a la nube exitosa');
       } else {
         resultEl.innerHTML = '<span style="color:var(--warn)">⚠️ Bin accesible pero con formato inesperado. Se inicializará al publicar.</span>';
       }
     } else {
-      resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error: ${readRes.status}. Verifica el token.</span>`;
+      resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error: ${readRes.status}. Verifica Bin ID y API Key.</span>`;
       toast('❌ Error al conectar: ' + readRes.status);
     }
   } catch(e) {
@@ -1011,29 +1014,44 @@ async function testCloudConnection() {
 }
 
 async function cloudFetch() {
-  const { binId } = getCloudConfig();
+  const { binId, apiKey } = getCloudConfig();
   if (!binId) throw new Error('La nube no está configurada');
+  if (!apiKey) throw new Error('API Key no configurada');
   
-  const url = `https://api.npoint.io/${binId}`;
+  const url = `https://api.jsonbin.io/v3/b/${binId}`;
   console.log('Fetching cloud:', url);
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' }
+  });
   if (res.status === 404) {
-    console.log('Cloud bin empty, initializing...');
-    return {}; // Bin vacío o no inicializado, devolver objeto vacío
+    console.log('Cloud bin empty, returning empty object');
+    return {}; // Bin vacío, devolver objeto vacío
   }
   if (!res.ok) throw new Error(`Error de nube: ${res.status} - ${res.statusText}`);
   const data = await res.json();
   console.log('Cloud data:', data);
-  return data || {};
+  return data.record || {};
 }
 
 async function cloudUpdate(newData) {
-  const { binId } = getCloudConfig();
+  const { binId, apiKey } = getCloudConfig();
   if (!binId) throw new Error('La nube no está configurada');
+  if (!apiKey) throw new Error('API Key no configurada');
   
-  const url = `https://api.npoint.io/${binId}`;
+  const url = `https://api.jsonbin.io/v3/b/${binId}`;
   const res = await fetch(url, {
     method: 'PUT',
+    headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify(newData)
+  });
+  if (!res.ok) {
+    let msg = `Error al actualizar nube: ${res.status}`;
+    if (res.status === 403) msg += ' - API Key inválida o sin permisos';
+    if (res.status === 404) msg += ' - Bin ID incorrecto';
+    throw new Error(msg);
+  }
+  return await res.json();
+}
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(newData)
   });
