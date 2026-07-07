@@ -1091,8 +1091,8 @@ async function publishExam() {
       await cloudUpdate(library);
       toast('✅ Guardado en la nube');
     } catch (e) {
-      console.error(e);
-      toast('⚠️ Error al subir a la nube, pero guardado localmente');
+      console.error('Error al subir a la nube:', e);
+      toast('⚠️ Error al subir a la nube: ' + e.message);
     }
   }
 
