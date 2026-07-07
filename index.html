@@ -958,9 +958,12 @@ async function cloudFetch() {
   if (!binId) throw new Error('La nube no está configurada');
   
   const url = `https://api.npoint.io/${binId}`;
+  console.log('Fetching cloud:', url);
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Error de nube: ${res.status}`);
-  return await res.json();
+  const data = await res.json();
+  console.log('Cloud data:', data);
+  return data;
 }
 
 async function cloudUpdate(newData) {
