@@ -550,8 +550,17 @@
       <label>API Key de la Nube (Opcional)</label>
       <input type="password" id="cloud-api-key" placeholder="X-Master-Key..." value="">
     </div>
-    <button class="btn btn-primary btn-sm btn-block" onclick="saveCloudConfig()">💾 Guardar Configuración de Nube</button>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveCloudConfig()">💾 Guardar</button>
+      <button class="btn btn-accent btn-sm" style="flex:1;" onclick="testCloudConnection()">🔍 Probar conexión</button>
+    </div>
     <div id="cloud-status" style="font-size:12px; color:var(--muted); margin-top:8px; text-align:center;">Modo Local Activo</div>
+    <div id="cloud-test-result" style="font-size:12px; margin-top:6px; text-align:center;"></div>
+    <div style="background:#fff3e0; border-radius:8px; padding:10px; margin-top:10px; font-size:11px; color:var(--warn); line-height:1.4;">
+      <strong>⚠️ Importante:</strong> En npoint.io, al crear un "New Bin", obtienes un <strong>Write Token (token secreto)</strong>.
+      Copia ese token completo en el campo "ID de la Nube". No uses el ID público de lectura.
+      También debes inicializar el bin con al menos <code>{}</code> en la pestaña "Contents".
+    </div>
   </div>
 
   <div class="card" id="profile-admin-section2" style="display:none;">
@@ -935,7 +944,7 @@ function saveCloudConfig() {
 
 function getCloudConfig() {
   return {
-    binId: localStorage.getItem('cloud_bin_id') || '859d21163290c8a4783',
+    binId: localStorage.getItem('cloud_bin_id') || '',
     apiKey: '' // No necesaria en npoint
   };
 }
@@ -945,11 +954,59 @@ function updateCloudStatus() {
   const el = document.getElementById('cloud-status');
   if (!el) return;
   if (config.binId) {
-    el.innerHTML = '☁️ <strong>Modo Nube Activo</strong> (ID: ' + config.binId.substring(0, 6) + '...)';
+    el.innerHTML = '☁️ <strong>Modo Nube Activo</strong> (ID: ' + config.binId.substring(0, 8) + '...)';
     el.style.color = 'var(--success)';
   } else {
     el.innerHTML = 'Modo Local Activo';
     el.style.color = 'var(--muted)';
+  }
+}
+
+async function testCloudConnection() {
+  const binId = document.getElementById('cloud-bin-id').value.trim();
+  const resultEl = document.getElementById('cloud-test-result');
+  if (!binId) {
+    resultEl.innerHTML = '<span style="color:var(--danger)">⚠️ Ingresa un ID de nube primero</span>';
+    toast('⚠️ No hay ID de nube');
+    return;
+  }
+  resultEl.innerHTML = '<span style="color:var(--muted)">🔄 Probando conexión...</span>';
+  try {
+    // Probar lectura
+    const readUrl = `https://api.npoint.io/${binId}`;
+    const readRes = await fetch(readUrl);
+    if (readRes.status === 404) {
+      // Bin existe pero vacío, intentar inicializarlo
+      resultEl.innerHTML = '<span style="color:var(--warn)">⚠️ El bin existe pero está vacío. Inicializando...</span>';
+      const writeRes = await fetch(readUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exams: {}, results: [] })
+      });
+      if (writeRes.ok) {
+        resultEl.innerHTML = '<span style="color:var(--success)">✅ Conexión exitosa! Bin inicializado correctamente.</span>';
+        toast('✅ Nube configurada y funcionando');
+      } else {
+        let extra = writeRes.status === 403 ? ' (el token no tiene permisos de escritura)' : '';
+        resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error de escritura: ${writeRes.status}${extra}</span>`;
+        toast('❌ Error de escritura: ' + writeRes.status);
+      }
+    } else if (readRes.ok) {
+      const data = await readRes.json();
+      // Verificar que tenga la estructura correcta
+      if (data && typeof data === 'object') {
+        resultEl.innerHTML = '<span style="color:var(--success)">✅ Conexión exitosa! Bin accesible.</span>';
+        toast('✅ Conexión a la nube exitosa');
+      } else {
+        resultEl.innerHTML = '<span style="color:var(--warn)">⚠️ Bin accesible pero con formato inesperado. Se inicializará al publicar.</span>';
+      }
+    } else {
+      resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error: ${readRes.status}. Verifica el token.</span>`;
+      toast('❌ Error al conectar: ' + readRes.status);
+    }
+  } catch(e) {
+    resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error de red: ${e.message}</span>`;
+    toast('❌ Error de red: ' + e.message);
   }
 }
 
@@ -960,10 +1017,14 @@ async function cloudFetch() {
   const url = `https://api.npoint.io/${binId}`;
   console.log('Fetching cloud:', url);
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Error de nube: ${res.status}`);
+  if (res.status === 404) {
+    console.log('Cloud bin empty, initializing...');
+    return {}; // Bin vacío o no inicializado, devolver objeto vacío
+  }
+  if (!res.ok) throw new Error(`Error de nube: ${res.status} - ${res.statusText}`);
   const data = await res.json();
   console.log('Cloud data:', data);
-  return data;
+  return data || {};
 }
 
 async function cloudUpdate(newData) {
@@ -976,7 +1037,12 @@ async function cloudUpdate(newData) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(newData)
   });
-  if (!res.ok) throw new Error(`Error al actualizar nube: ${res.status}`);
+  if (!res.ok) {
+    let msg = `Error al actualizar nube: ${res.status}`;
+    if (res.status === 403) msg += ' - El ID ingresado no tiene permisos de escritura. Usa el WRITE TOKEN (token secreto) de npoint.io, NO el ID público.';
+    if (res.status === 404) msg += ' - El ID no existe. Verifica que el token sea correcto.';
+    throw new Error(msg);
+  }
   return await res.json();
 }
 
@@ -1069,19 +1135,20 @@ async function publishExam() {
 
   const auth = getAuth();
   const code = genCode();
+  const { binId } = getCloudConfig();
   const exam = {
     code, title, subject, instructions, group, time,
     questions: [...questions],
     createdAt: new Date().toISOString(),
     active: true,
-    createdBy: auth.name || 'Admin'
+    createdBy: auth.name || 'Admin',
+    cloudBinId: binId || '' // Guardar el binId en el examen para compartir
   };
 
   publishedExams[code] = exam;
   localStorage.setItem('exams', JSON.stringify(publishedExams));
 
   // Sincronizar con la Nube si está configurada
-  const { binId } = getCloudConfig();
   if (binId) {
     try {
       toast('☁️ Sincronizando con la biblioteca en la nube...');
@@ -1106,11 +1173,19 @@ async function publishExam() {
 
 function showShareModal(code, exam) {
   const { binId } = getCloudConfig();
+  const baseUrl = window.location.href.split('?')[0].split('#')[0];
+  const binParam = binId ? '&bin=' + binId : '';
+  const shareUrl = baseUrl + '?student=1&code=' + code + binParam;
+  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent('📋 *Examen: ' + exam.title + '*\n🔐 *Código: ' + code + '*\n\nAbrir enlace: ' + shareUrl);
+  
   const cloudInfo = binId ? `
     <div style="background:#e3f2fd; border-radius:10px; padding:12px; margin-top:8px;">
       <div style="font-size:12px; font-weight:700; color:#1565c0; margin-bottom:6px;">☁️ Acceso en la Nube Activado:</div>
-      <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Tus alumnos pueden acceder desde cualquier dispositivo usando solo el código.</div>
-      <div style="font-size:11px; color:var(--primary); text-align:center;">No es necesario enviar el archivo .json</div>
+      <div style="font-size:12px; color:var(--muted); margin-bottom:10px;">Tus alumnos pueden abrir este enlace desde cualquier dispositivo:</div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn btn-success btn-sm" style="flex:1;" onclick="window.open('${whatsappUrl}', '_blank')">📱 WhatsApp</button>
+        <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="copyToClipboard('${shareUrl}')">📋 Copiar Link</button>
+      </div>
     </div>
   ` : `
     <div style="background:#fff3e0; border-radius:10px; padding:12px; margin-top:8px;">
@@ -1210,6 +1285,10 @@ async function loadExam() {
       if (exam) {
         publishedExams[code] = exam;
         localStorage.setItem('exams', JSON.stringify(publishedExams));
+        // Guardar el binId de la nube encontrado en el examen
+        if (exam.cloudBinId) {
+          localStorage.setItem('cloud_bin_id', exam.cloudBinId);
+        }
       }
     } catch (e) {
       console.error('Cloud load error:', e);
@@ -1801,6 +1880,10 @@ function studentImportExam() {
       }
       publishedExams[exam.code] = exam;
       localStorage.setItem('exams', JSON.stringify(publishedExams));
+      // Guardar el binId del examen importado para futuras búsquedas en la nube
+      if (exam.cloudBinId) {
+        localStorage.setItem('cloud_bin_id', exam.cloudBinId);
+      }
       fileInput.value = '';
       document.getElementById('import-status').innerHTML = '<span style="color:var(--success);">✅ Examen "' + exam.title + '" importado. Código: <strong>' + exam.code + '</strong></span>';
       showAvailableExams();
@@ -1832,10 +1915,12 @@ function showShareLinkModal(code) {
   const exam = publishedExams[code];
   if (!exam) { toast('❌ Examen no encontrado'); return; }
   
-  // Construimos un link que pueda ser usado si el archivo está en un servidor o carpeta compartida
+  // Construimos un link que incluya el binId de la nube para que el alumno pueda leer
   const baseUrl = window.location.href.split('?')[0].split('#')[0];
-  const shareUrl = baseUrl + '?student=1&code=' + code;
-  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent('📋 *Examen: ' + exam.title + '*\n🔐 *Código: ' + code + '*\n\nUsa este código en ExamIA para realizar tu examen.');
+  const cloudConfig = getCloudConfig();
+  const binParam = cloudConfig.binId ? '&bin=' + cloudConfig.binId : '';
+  const shareUrl = baseUrl + '?student=1&code=' + code + binParam;
+  const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent('📋 *Examen: ' + exam.title + '*\n🔐 *Código: ' + code + '*\n\nAbrir enlace: ' + shareUrl);
   
   document.getElementById('modal-title').textContent = '🔗 Compartir Examen: ' + exam.title;
   document.getElementById('modal-body').innerHTML = `
@@ -1900,6 +1985,12 @@ window.addEventListener('load', () => {
   
   // Manejar parámetros de URL para acceso directo al examen
   const params = new URLSearchParams(window.location.search);
+  
+  // Si el enlace contiene un binId de nube, guardarlo para que el alumno pueda leer
+  if (params.has('bin')) {
+    localStorage.setItem('cloud_bin_id', params.get('bin'));
+  }
+  
   if (params.has('code')) {
     const code = params.get('code').toUpperCase();
     document.getElementById('student-code').value = code;
