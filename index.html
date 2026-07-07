@@ -1052,17 +1052,6 @@ async function cloudUpdate(newData) {
   }
   return await res.json();
 }
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(newData)
-  });
-  if (!res.ok) {
-    let msg = `Error al actualizar nube: ${res.status}`;
-    if (res.status === 403) msg += ' - El ID ingresado no tiene permisos de escritura. Usa el WRITE TOKEN (token secreto) de npoint.io, NO el ID público.';
-    if (res.status === 404) msg += ' - El ID no existe. Verifica que el token sea correcto.';
-    throw new Error(msg);
-  }
-  return await res.json();
-}
 
 // ── GUARDAR TODO E IR AL INICIO ──
 function saveAllAndGoHome() {
