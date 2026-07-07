@@ -1202,6 +1202,12 @@ async function loadExam() {
       toast('☁️ Buscando en la biblioteca de la nube...');
       const library = await cloudFetch();
       exam = library.exams ? library.exams[code] : null;
+      
+      // Guardar en localStorage para que funcione la navegación en este navegador
+      if (exam) {
+        publishedExams[code] = exam;
+        localStorage.setItem('exams', JSON.stringify(publishedExams));
+      }
     } catch (e) {
       console.error('Cloud load error:', e);
       toast('⚠️ Error al conectar con la nube, buscando localmente...');
@@ -1217,7 +1223,7 @@ async function loadExam() {
     const disp = Object.keys(publishedExams || {});
     const msg = disp.length
       ? '❌ Examen "' + code + '" no encontrado. Disponibles: ' + disp.join(', ')
-      : '❌ No hay exámenes. Ingresa un código válido o importa el archivo .json.';
+      : '❌ No hay exámenes. Ingresa un código válido.';
     toast(msg, 5000);
     return;
   }
@@ -1227,7 +1233,6 @@ async function loadExam() {
   document.getElementById('exam-preview').innerHTML = `
     <div style="font-size:15px; font-weight:700; color:var(--primary);">📋 ${exam.title}</div>
     <div style="font-size:13px; color:var(--muted); margin:4px 0;">${exam.subject} · ${exam.time} min · ${exam.questions.length} preguntas</div>
-    ${exam.instructions ? '<div style="font-size:13px; margin-top:8px; padding:10px; background:#fff; border-radius:8px; border-left:3px solid var(--accent);">' + exam.instructions + '</div>' : ''}
   `;
   toast('✅ Examen encontrado');
 }
