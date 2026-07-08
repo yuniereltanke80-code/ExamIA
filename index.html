@@ -540,15 +540,11 @@
   </div>
 
 <div class="card" id="profile-cloud-section" style="display:none;">
-      <div class="card-title">☁️ Almacenamiento en la Nube (JSONBin.io)</div>
-      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Usa la nube para que tus alumnos accedan a los exámenes desde cualquier lugar.</p>
+      <div class="card-title">☁️ Almacenamiento en la Nube (Firebase)</div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Sincronización gratuita y profesional mediante Google Firebase.</p>
       <div class="field">
-        <label>Bin ID</label>
-        <input type="text" id="cloud-bin-id" placeholder="Ej: 65f..." value="">
-      </div>
-      <div class="field">
-        <label>API Key (Master Key)</label>
-        <input type="password" id="cloud-api-key" placeholder="Tu Master Key de JSONBin.io" value="">
+        <label>Configuración de Firebase (firebaseConfig JSON)</label>
+        <textarea id="cloud-config-json" placeholder='{"apiKey": "...", "databaseURL": "...", ...}' style="min-height:120px; font-family:var(--mono); font-size:12px;"></textarea>
       </div>
       <div style="display:flex; gap:8px;">
         <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveCloudConfig()">💾 Guardar</button>
@@ -556,8 +552,11 @@
       </div>
       <div id="cloud-status" style="font-size:12px; color:var(--muted); margin-top:8px; text-align:center;">Modo Local Activo</div>
       <div id="cloud-test-result" style="font-size:12px; margin-top:6px; text-align:center;"></div>
-      <div style="background:#fff3e0; border-radius:8px; padding:10px; margin-top:10px; font-size:11px; color:var(--warn); line-height:1.4;">
-        <strong>⚠️ Configuración:</strong> En <a href="https://jsonbin.io" target="_blank">jsonbin.io</a> crea una cuenta → New Bin → copia el <strong>Bin ID</strong> y tu <strong>Master Key</strong> (Settings → API Keys).
+      <div style="background:#e3f2fd; border-radius:8px; padding:10px; margin-top:10px; font-size:11px; color:#1565c0; line-height:1.4;">
+        <strong>Pasos rápidos:</strong><br>
+        1. Crea proyecto en <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a><br>
+        2. Crea una <strong>Realtime Database</strong> en modo prueba<br>
+        3. Registra una Web App y copia el objeto <code>firebaseConfig</code>
       </div>
     </div>
 
