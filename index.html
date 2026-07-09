@@ -541,22 +541,14 @@
 
 <div class="card" id="profile-cloud-section" style="display:none;">
       <div class="card-title">☁️ Almacenamiento en la Nube (Firebase)</div>
-      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Sincronización gratuita y profesional mediante Google Firebase.</p>
-      <div class="field">
-        <label>Configuración de Firebase (firebaseConfig JSON)</label>
-        <textarea id="cloud-config-json" placeholder='{"apiKey": "...", "databaseURL": "...", ...}' style="min-height:120px; font-family:var(--mono); font-size:12px;"></textarea>
-      </div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Tu proyecto Firebase ya está configurado. Solo verifica la conexión.</p>
       <div style="display:flex; gap:8px;">
-        <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveCloudConfig()">💾 Guardar</button>
         <button class="btn btn-accent btn-sm" style="flex:1;" onclick="testCloudConnection()">🔍 Probar conexión</button>
       </div>
       <div id="cloud-status" style="font-size:12px; color:var(--muted); margin-top:8px; text-align:center;">Modo Local Activo</div>
       <div id="cloud-test-result" style="font-size:12px; margin-top:6px; text-align:center;"></div>
       <div style="background:#e3f2fd; border-radius:8px; padding:10px; margin-top:10px; font-size:11px; color:#1565c0; line-height:1.4;">
-        <strong>Pasos rápidos:</strong><br>
-        1. Crea proyecto en <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a><br>
-        2. Crea una <strong>Realtime Database</strong> en modo prueba<br>
-        3. Registra una Web App y copia el objeto <code>firebaseConfig</code>
+        <strong>Requisito:</strong> En <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a> → Build → Realtime Database → Crea la base de datos en <strong>modo prueba</strong>.
       </div>
     </div>
 
@@ -930,126 +922,71 @@ function testApiKey() {
   });
 }
 
-// ── NUBE (npoint.io) ──
+// ── NUBE (Firebase) ──
 function saveCloudConfig() {
-  const binId = document.getElementById('cloud-bin-id').value.trim();
-  const apiKey = document.getElementById('cloud-api-key').value.trim();
-  if (!binId) { toast('⚠️ Ingresa el Bin ID'); return; }
-  if (!apiKey) { toast('⚠️ Ingresa la API Key (Master Key)'); return; }
-  localStorage.setItem('cloud_bin_id', binId);
-  localStorage.setItem('cloud_api_key', apiKey);
-  toast('✅ Configuración de nube guardada');
+  toast('✅ Configuración de Firebase ya integrada');
   updateCloudStatus();
 }
 
 function getCloudConfig() {
   return {
-    binId: localStorage.getItem('cloud_bin_id') || '',
-    apiKey: localStorage.getItem('cloud_api_key') || ''
+    apiKey: "AIzaSyDu8L_PythrZcPIju17KmwDJHwOp10oYCM",
+    authDomain: "examenia-45b84.firebaseapp.com",
+    databaseURL: "https://examenia-45b84-default-rtdb.firebaseio.com/",
+    projectId: "examenia-45b84",
+    storageBucket: "examenia-45b84.firebasestorage.app",
+    messagingSenderId: "650074861199",
+    appId: "1:650074861199:web:166ce0a507dcabee648afa",
+    measurementId: "G-SY3WTLW4RL"
   };
 }
 
 function updateCloudStatus() {
-  const config = getCloudConfig();
   const el = document.getElementById('cloud-status');
   if (!el) return;
-  if (config.binId) {
-    el.innerHTML = '☁️ <strong>Modo Nube Activo</strong> (ID: ' + config.binId.substring(0, 8) + '...)';
-    el.style.color = 'var(--success)';
-  } else {
-    el.innerHTML = 'Modo Local Activo';
-    el.style.color = 'var(--muted)';
-  }
+  el.innerHTML = '☁️ <strong>Modo Nube Activo</strong> (Firebase)';
+  el.style.color = 'var(--success)';
 }
 
 async function testCloudConnection() {
-  const binId = document.getElementById('cloud-bin-id').value.trim();
-  const apiKey = document.getElementById('cloud-api-key').value.trim();
   const resultEl = document.getElementById('cloud-test-result');
-  if (!binId || !apiKey) {
-    resultEl.innerHTML = '<span style="color:var(--danger)">⚠️ Ingresa Bin ID y API Key primero</span>';
-    toast('⚠️ Falta Bin ID o API Key');
-    return;
-  }
-  resultEl.innerHTML = '<span style="color:var(--muted)">🔄 Probando conexión...</span>';
+  resultEl.innerHTML = '<span style="color:var(--primary)">🔄 Probando conexión con Firebase...</span>';
+  toast('🔄 Conectando...');
+  
   try {
-    // Probar lectura con headers de JSONBin.io
-    const readUrl = `https://api.jsonbin.io/v3/b/${binId}`;
-    const readRes = await fetch(readUrl, {
-      headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' }
-    });
-    if (readRes.status === 404) {
-      // Bin existe pero vacío, intentar inicializarlo
-      resultEl.innerHTML = '<span style="color:var(--warn)">⚠️ El bin existe pero está vacío. Inicializando...</span>';
-      const writeRes = await fetch(readUrl, {
-        method: 'PUT',
-        headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ exams: {}, results: [] })
-      });
-      if (writeRes.ok) {
-        resultEl.innerHTML = '<span style="color:var(--success)">✅ Conexión exitosa! Bin inicializado correctamente.</span>';
-        toast('✅ Nube configurada y funcionando');
-      } else {
-        let extra = writeRes.status === 403 ? ' (API Key inválida o sin permisos)' : '';
-        resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error de escritura: ${writeRes.status}${extra}</span>`;
-        toast('❌ Error de escritura: ' + writeRes.status);
-      }
-    } else if (readRes.ok) {
-      const data = await readRes.json();
-      if (data && data.record && typeof data.record === 'object') {
-        resultEl.innerHTML = '<span style="color:var(--success)">✅ Conexión exitosa! Bin accesible.</span>';
-        toast('✅ Conexión a la nube exitosa');
-      } else {
-        resultEl.innerHTML = '<span style="color:var(--warn)">⚠️ Bin accesible pero con formato inesperado. Se inicializará al publicar.</span>';
-      }
-    } else {
-      resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error: ${readRes.status}. Verifica Bin ID y API Key.</span>`;
-      toast('❌ Error al conectar: ' + readRes.status);
+    const config = getCloudConfig();
+    if (!firebase.apps.length) {
+      firebase.initializeApp(config);
     }
+    const db = firebase.database();
+    await db.ref('.info/connected').once('value');
+    resultEl.innerHTML = '<span style="color:var(--success)">✅ Conexión exitosa! Firebase responde correctamente.</span>';
+    toast('✅ Firebase conectado y listo');
   } catch(e) {
-    resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error de red: ${e.message}</span>`;
-    toast('❌ Error de red: ' + e.message);
+    console.error('Firebase error:', e);
+    resultEl.innerHTML = `<span style="color:var(--danger)">❌ Error: ${e.message}</span>`;
+    toast('❌ Error: ' + e.message);
   }
 }
 
 async function cloudFetch() {
-  const { binId, apiKey } = getCloudConfig();
-  if (!binId) throw new Error('La nube no está configurada');
-  if (!apiKey) throw new Error('API Key no configurada');
-  
-  const url = `https://api.jsonbin.io/v3/b/${binId}`;
-  console.log('Fetching cloud:', url);
-  const res = await fetch(url, {
-    headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' }
-  });
-  if (res.status === 404) {
-    console.log('Cloud bin empty, returning empty object');
-    return {}; // Bin vacío, devolver objeto vacío
+  const config = getCloudConfig();
+  if (!firebase.apps.length) {
+    firebase.initializeApp(config);
   }
-  if (!res.ok) throw new Error(`Error de nube: ${res.status} - ${res.statusText}`);
-  const data = await res.json();
-  console.log('Cloud data:', data);
-  return data.record || {};
+  const db = firebase.database();
+  const snapshot = await db.ref('exams').once('value');
+  return snapshot.val() || {};
 }
 
 async function cloudUpdate(newData) {
-  const { binId, apiKey } = getCloudConfig();
-  if (!binId) throw new Error('La nube no está configurada');
-  if (!apiKey) throw new Error('API Key no configurada');
-  
-  const url = `https://api.jsonbin.io/v3/b/${binId}`;
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: { 'X-Master-Key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify(newData)
-  });
-  if (!res.ok) {
-    let msg = `Error al actualizar nube: ${res.status}`;
-    if (res.status === 403) msg += ' - API Key inválida o sin permisos';
-    if (res.status === 404) msg += ' - Bin ID incorrecto';
-    throw new Error(msg);
+  const config = getCloudConfig();
+  if (!firebase.apps.length) {
+    firebase.initializeApp(config);
   }
-  return await res.json();
+  const db = firebase.database();
+  await db.ref('exams').set(newData);
+  return { success: true };
 }
 
 // ── GUARDAR TODO E IR AL INICIO ──
