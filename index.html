@@ -688,10 +688,7 @@ function goProfile() {
     const savedModel = getGeminiModel();
     if (modelSelect) modelSelect.value = savedModel;
     
-    // Cargar Configuración de Nube
-    const cloud = getCloudConfig();
-    document.getElementById('cloud-bin-id').value = cloud.binId;
-    document.getElementById('cloud-api-key').value = cloud.apiKey;
+    // Configuración de Firebase ya hardcodeada
     updateCloudStatus();
     
     renderTeachersList();
