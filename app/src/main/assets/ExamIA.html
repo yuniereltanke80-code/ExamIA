@@ -340,9 +340,13 @@
           <option value="analisis">Análisis / Opinión</option>
         </select>
       </div>
+      <div class="field">
+        <label>Clave de calificación (Opcional)</label>
+        <textarea id="exam-key" placeholder="Instrucciones específicas para la IA o claves de respuesta correctas..."></textarea>
+      </div>
       <button class="btn btn-accent btn-sm" onclick="addQuestion()">➕ Agregar pregunta</button>
     </div>
-
+    
     <button class="btn btn-primary btn-block" onclick="publishExam()">
       🚀 Publicar Examen
     </button>
@@ -443,6 +447,10 @@
         <label>Nombre completo</label>
         <input type="text" id="stu-name" placeholder="Nombre y apellidos">
       </div>
+      <div class="field" style="grid-column:1/-1;">
+        <label>Escuela</label>
+        <input type="text" id="stu-escuela" placeholder="Nombre de la escuela">
+      </div>
       <div class="field">
         <label>Municipio</label>
         <input type="text" id="stu-municipio" placeholder="Municipio">
@@ -517,28 +525,29 @@
     <h2 style="font-size:20px; font-weight:700; color:var(--primary);">Perfil</h2>
   </div>
 
-  <div class="card" id="profile-admin-section" style="display:none;">
-    <div class="card-title">🤖 Configuración de IA — Gemini</div>
-    <div class="field">
-      <label>API Key de Google Gemini</label>
-      <input type="password" id="gemini-key" placeholder="AIza..." value="">
+    <div class="card" id="profile-admin-section" style="display:none;">
+      <div class="card-title">🤖 Configuración de IA — Gemini</div>
+      <div class="field">
+        <label>API Key de Google Gemini</label>
+        <input type="password" id="gemini-key" placeholder="AIza..." value="" oninput="validateKeyFormat(this)">
+      </div>
+      <div class="field">
+        <label>Modelo de IA</label>
+        <select id="gemini-model">
+          <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+          <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+          <option value="gemini-2.0-flash-exp">Gemini 2.0 Flash</option>
+          <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite</option>
+          <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+          <option value="mistral-medium">Mistral Medium</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="saveApiKey()">💾 Guardar clave</button>
+        <button class="btn btn-accent btn-sm" onclick="testApiKey()">🔍 Probar clave</button>
+      </div>
+      <div id="api-test-result" style="font-size:12px; color:var(--muted); margin-top:8px;"></div>
     </div>
-    <div class="field">
-      <label>Modelo de Gemini</label>
-      <select id="gemini-model">
-        <option value="gemini-1.5-flash">Gemini 1.5 Flash (rápido, gratuito)</option>
-        <option value="gemini-1.5-pro">Gemini 1.5 Pro (más preciso)</option>
-        <option value="gemini-1.0-pro">Gemini 1.0 Pro (estable)</option>
-      </select>
-    </div>
-    <div style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn btn-ghost btn-sm" onclick="saveApiKey()">💾 Guardar clave</button>
-      <button class="btn btn-accent btn-sm" onclick="testApiKey()">🔍 Probar clave</button>
-    </div>
-    <div id="api-test-result" style="font-size:12px; color:var(--muted); margin-top:8px;">
-      Obtén tu clave gratis en <strong>aistudio.google.com</strong>
-    </div>
-  </div>
 
 <div class="card" id="profile-cloud-section" style="display:none;">
       <div class="card-title">☁️ Almacenamiento en la Nube (Firebase)</div>
@@ -877,13 +886,26 @@ function enterAsTeacher() {
 }
 
 // ── API KEY Y MODELO ──
+function validateKeyFormat(input) {
+  // Solo limpieza visual, no cambia la lógica de guardado
+  input.value = input.value.trim();
+}
+
 function saveApiKey() {
   const key = document.getElementById('gemini-key').value.trim();
   const model = document.getElementById('gemini-model').value;
   if (!key) { toast('⚠️ Ingresa una clave válida'); return; }
+  
+  // Guardado explícito y verificación
   localStorage.setItem('gemini_key', key);
   localStorage.setItem('gemini_model', model);
-  toast('✅ Configuración guardada');
+  
+  // Verificación de guardado
+  if (localStorage.getItem('gemini_key') === key) {
+    toast('✅ Clave guardada correctamente');
+  } else {
+    toast('❌ Error al guardar la clave');
+  }
 }
 
 function getApiKey() {
@@ -951,7 +973,7 @@ function getCloudConfig() {
   return {
     apiKey: "AIzaSyDu8L_PythrZcPIju17KmwDJHwOp10oYCM",
     authDomain: "examenia-45b84.firebaseapp.com",
-    databaseURL: "https://examenia-45b84-default-rtdb.firebaseio.com/",
+    databaseURL: "https://examenia-45b84-default-rtdb.europe-west1.firebasedatabase.app",
     projectId: "examenia-45b84",
     storageBucket: "examenia-45b84.firebasestorage.app",
     messagingSenderId: "650074861199",
@@ -1138,6 +1160,7 @@ async function publishExam() {
   const time = parseInt(document.getElementById('exam-time').value);
   const group = document.getElementById('exam-group').value.trim();
   const instructions = document.getElementById('exam-instructions').value.trim();
+  const key = document.getElementById('exam-key').value.trim(); // Nueva clave
 
   if (!title) { toast('⚠️ Falta el título'); return; }
   if (!subject) { toast('⚠️ Falta la materia'); return; }
@@ -1148,25 +1171,28 @@ async function publishExam() {
   const code = genCode();
   const { binId } = getCloudConfig();
   const exam = {
-    code, title, subject, instructions, group, time,
+    code, title, subject, instructions, group, time, key, // Incluida la clave
     questions: [...questions],
     createdAt: new Date().toISOString(),
     active: true,
     createdBy: auth.name || 'Admin',
-    cloudBinId: binId || '' // Guardar el binId en el examen para compartir
+    cloudBinId: binId || '' 
   };
 
   publishedExams[code] = exam;
   localStorage.setItem('exams', JSON.stringify(publishedExams));
 
   // Sincronizar con la Nube si está configurada
-  if (binId) {
+  const config = getCloudConfig();
+  if (config && config.databaseURL) {
     try {
       toast('☁️ Sincronizando con la biblioteca en la nube...');
-      const library = await cloudFetch();
-      library.exams = library.exams || {};
-      library.exams[code] = exam;
-      await cloudUpdate(library);
+      // Ensure app is initialized
+      if (!firebase.apps.length) {
+        firebase.initializeApp(config);
+      }
+      const db = firebase.database();
+      await db.ref('exams/' + code).set(exam);
       toast('✅ Guardado en la nube');
     } catch (e) {
       console.error('Error al subir a la nube:', e);
@@ -1176,8 +1202,12 @@ async function publishExam() {
 
   questions = [];
   renderQuestionsList();
-  ['exam-title','exam-subject','exam-instructions','exam-group'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('exam-time').value = 60;
+  // Limpiar campos y reiniciar
+  document.getElementById('exam-title').value = '';
+  document.getElementById('exam-subject').value = '';
+  document.getElementById('exam-instructions').value = '';
+  document.getElementById('exam-group').value = '';
+  document.getElementById('exam-time').value = '60';
 
   showShareModal(code, exam);
 }
@@ -1309,9 +1339,14 @@ async function loadExam() {
 
   if (hasCloudConfig) {
     try {
-      toast('☁️ Buscando en la biblioteca de la nube...');
-      const library = await cloudFetch();
-      exam = library.exams ? library.exams[code] : null;
+      toast('☁️ Buscando examen en la nube...');
+      // Ensure app is initialized
+      if (!firebase.apps.length) {
+        firebase.initializeApp(config);
+      }
+      const db = firebase.database();
+      const snapshot = await db.ref('exams/' + code).once('value');
+      exam = snapshot.val();
       
       // Guardar en localStorage para que funcione la navegación en este navegador
       if (exam) {
@@ -1349,18 +1384,20 @@ async function loadExam() {
 
 function startExam() {
   const name = document.getElementById('stu-name').value.trim();
+  const escuela = document.getElementById('stu-escuela').value.trim();
   const mun = document.getElementById('stu-municipio').value.trim();
   const prov = document.getElementById('stu-provincia').value.trim();
   const grupo = document.getElementById('stu-grupo').value.trim();
   const numero = document.getElementById('stu-numero').value.trim();
 
   if (!name) { toast('⚠️ Ingresa tu nombre completo'); return; }
+  if (!escuela) { toast('⚠️ Ingresa el nombre de tu escuela'); return; }
   if (!mun) { toast('⚠️ Ingresa tu municipio'); return; }
   if (!prov) { toast('⚠️ Ingresa tu provincia'); return; }
   if (!grupo) { toast('⚠️ Ingresa tu grupo'); return; }
   if (!numero) { toast('⚠️ Ingresa tu número de lista'); return; }
 
-  studentInfo = { name, municipio: mun, provincia: prov, grupo, numero };
+  studentInfo = { name, escuela, municipio: mun, provincia: prov, grupo, numero };
 
   document.getElementById('exam-running-title').textContent = currentExam.title;
   document.getElementById('exam-running-subject').textContent = currentExam.subject;
@@ -1504,28 +1541,22 @@ async function submitExam() {
   });
 
   document.getElementById('result-circle').innerHTML = `
-    <div class="ai-loading" style="border-radius:50%; width:100%; height:100%; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px;">
-      <div style="display:flex; gap:4px;"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>
-      <div style="font-size:10px; color:var(--muted);">IA calificando</div>
+    <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:4px;">
+      <div style="font-size:40px;">📤</div>
     </div>
   `;
-  document.getElementById('result-grade-text').textContent = getGeminiModel() + ' está revisando tus respuestas...';
+  document.getElementById('result-grade-text').textContent = 'Respuestas enviadas correctamente';
   document.getElementById('result-name').textContent = studentInfo.name;
-  document.getElementById('result-feedback-list').innerHTML = '';
+  document.getElementById('result-feedback-list').innerHTML = `
+    <div class="card" style="background:#e8f5e9;">
+      <p>Tus respuestas han sido enviadas al profesor. Él se encargará de la calificación.</p>
+    </div>
+  `;
 
-  let grading;
-  try {
-    grading = await gradeWithGemini(answers, currentExam);
-  } catch(e) {
-    console.error('Error en calificación:', e);
-    grading = { score: null, grade: '', summary: '', feedback: [], error: e.message };
-    toast('⚠️ Error: ' + e.message);
-  }
-
-  displayResult(grading, answers);
-  await saveResult(grading, answers);
-
-  document.getElementById('topbar-sub').textContent = grading.score != null ? 'Nota: ' + grading.score.toFixed(1) + '/10' : 'Resultado';
+  // Guardar resultado como pendiente de calificar
+  const result = await saveResult({ score: null, grade: 'Pendiente', summary: 'Esperando calificación del profesor', feedback: [] }, answers);
+  
+  document.getElementById('topbar-sub').textContent = 'Enviado';
 }
 
 async function gradeWithGemini(answers, exam) {
@@ -1534,7 +1565,17 @@ async function gradeWithGemini(answers, exam) {
   if (!apiKey) throw new Error('No hay API Key de Gemini. Ve a Perfil y guarda una.');
 
   const ptsPerQuestion = (10 / answers.length).toFixed(2);
-  const prompt = 'Eres un profesor experto. Califica este examen de "' + exam.subject + '". EXAMEN: ' + exam.title + '. INSTRUCCIONES: ' + (exam.instructions || 'Ninguna') + '.\n\nCada pregunta vale ' + ptsPerQuestion + ' puntos (total: 10 puntos).\n\nRESPUESTAS:\n' + answers.map((a, i) => 'Pregunta ' + (i+1) + ': ' + a.question + '\nEstado: ' + (a.skipped ? 'NO RESPONDIDA' : 'RESPONDIDA') + '\nRespuesta: ' + a.answer).join('\n\n') + '\n\nDevuelve SOLO JSON valido con este formato:\n{"score": numero_0_a_10, "grade": "Excelente|Muy Bien|Bien|Regular|Insuficiente", "summary": "resumen", "feedback": [{"question": 1, "pts_earned": numero, "pts_max": ' + ptsPerQuestion + ', "comment": "comentario"}]}';
+  const keyInfo = exam.key ? '\n\nIMPORTANTE - CLAVE DE CALIFICACIÓN OBLIGATORIA:\n' + 
+  'EVALÚA ESTRICTAMENTE BASÁNDOTE EN ESTA CLAVE:\n' + exam.key + 
+  '\nSi la respuesta del estudiante no cumple con los puntos clave indicados en esta clave, penaliza los puntos correspondientes.' : '';
+  
+  const prompt = 'Eres un profesor experto y riguroso. Califica este examen de "' + exam.subject + '". ' +
+  'EXAMEN: ' + exam.title + '. ' +
+  'INSTRUCCIONES: ' + (exam.instructions || 'Ninguna') + '.' + 
+  keyInfo + '\n\n' +
+  'Cada pregunta vale ' + ptsPerQuestion + ' puntos (total: 10 puntos).\n\n' +
+  'RESPUESTAS DEL ESTUDIANTE:\n' + answers.map((a, i) => 'Pregunta ' + (i+1) + ': ' + a.question + '\nEstado: ' + (a.skipped ? 'NO RESPONDIDA' : 'RESPONDIDA') + '\nRespuesta: ' + a.answer).join('\n\n') + '\n\n' +
+  'Devuelve SOLO JSON válido con este formato:\n{"score": numero_0_a_10, "grade": "Excelente|Muy Bien|Bien|Regular|Insuficiente", "summary": "resumen general", "feedback": [{"question": 1, "pts_earned": numero, "pts_max": ' + ptsPerQuestion + ', "comment": "comentario detallado basado en la clave"}]}';
 
   let res;
   try {
@@ -1618,10 +1659,12 @@ async function saveResult(grading, answers) {
   const config = getCloudConfig();
   if (config && config.databaseURL) {
     try {
-      const library = await cloudFetch();
-      library.results = library.results || [];
-      library.results.push(result);
-      await cloudUpdate(library);
+      // Ensure app is initialized
+      if (!firebase.apps.length) {
+        firebase.initializeApp(config);
+      }
+      const db = firebase.database();
+      await db.ref('results/' + currentExam.code + '/' + result.id).set(result);
       console.log('✅ Resultado guardado en la nube');
     } catch (e) {
       console.error('Error al guardar resultado en la nube:', e);
@@ -1696,9 +1739,29 @@ async function renderResults() {
   const config = getCloudConfig();
   if (config && config.databaseURL) {
     try {
-      const library = await cloudFetch();
-      if (library.results && library.results.length > allResults.length) {
-        allResults = library.results;
+      if (!firebase.apps.length) {
+        firebase.initializeApp(config);
+      }
+      const db = firebase.database();
+      const snapshot = await db.ref('results').once('value');
+      const data = snapshot.val();
+      if (data) {
+        let newResults = [];
+        Object.values(data).forEach(examResults => {
+          Object.values(examResults).forEach(r => {
+            newResults.push(r);
+          });
+        });
+        
+        // Ordenar: Provincia -> Municipio -> Grupo -> Numero
+        newResults.sort((a, b) => {
+          if (a.provincia !== b.provincia) return a.provincia.localeCompare(b.provincia);
+          if (a.municipio !== b.municipio) return a.municipio.localeCompare(b.municipio);
+          if (a.grupo !== b.grupo) return a.grupo.localeCompare(b.grupo);
+          return parseInt(a.numero) - parseInt(b.numero);
+        });
+        
+        allResults = newResults;
         localStorage.setItem('results', JSON.stringify(allResults));
       }
     } catch (e) {
@@ -1708,7 +1771,7 @@ async function renderResults() {
   
   const el = document.getElementById('results-container');
   if (!allResults.length) {
-    el.innerHTML = '<div class="empty"><div class="icon">📈</div><p>No hay resultados. Los estudiantes deben descargar sus resultados y compartírtelos.</p></div>';
+    el.innerHTML = '<div class="empty"><div class="icon">📈</div><p>No hay resultados. Los estudiantes deben enviar sus exámenes.</p></div>';
     return;
   }
   el.innerHTML = `
@@ -1716,23 +1779,23 @@ async function renderResults() {
       <table class="results-table">
         <thead>
           <tr>
-            <th>Nombre</th>
-            <th>Examen</th>
-            <th>Grupo</th>
+            <th>Nombre y Apellidos</th>
+            <th>Provincia</th>
+            <th>Municipio</th>
+            <th>Escuela</th>
             <th>#</th>
             <th>Nota</th>
-            <th>Calificación</th>
           </tr>
         </thead>
         <tbody>
           ${allResults.map(r => `
             <tr>
               <td>${r.name}</td>
-              <td style="max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.examTitle}</td>
-              <td>${r.grupo}</td>
+              <td>${r.provincia}</td>
+              <td>${r.municipio}</td>
+              <td>${r.escuela || 'N/A'}</td>
               <td>${r.numero}</td>
               <td><strong style="color:${r.score>=7?'var(--success)':r.score>=5?'var(--warn)':'var(--danger)'};">${r.score?.toFixed(1)||'—'}</strong></td>
-              <td><span class="badge ${r.score>=7?'badge-success':r.score>=5?'badge-warn':'badge-danger'}">${r.grade||'—'}</span></td>
             </tr>
           `).join('')}
         </tbody>
@@ -1760,11 +1823,12 @@ function renderAnalysis() {
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
         <div>
           <div style="font-size:16px; font-weight:700; color:var(--primary);">${r.name}</div>
-          <div style="font-size:13px; color:var(--muted);">${r.provincia} · ${r.municipio} · ${r.grupo} · #${r.numero}</div>
+          <div style="font-size:13px; color:var(--muted);">${r.escuela || 'N/A'} · ${r.provincia} · ${r.municipio} · ${r.grupo} · #${r.numero}</div>
           <div style="font-size:12px; color:var(--muted); margin-top:4px;">${r.examTitle} · ${r.subject}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:14px; font-weight:700; color:${r.score>=7?'var(--success)':r.score>=5?'var(--warn)':'var(--danger)'};">Nota: ${r.score?.toFixed(1)||'—'}</div>
+          ${r.score == null ? `<button class="btn btn-accent btn-sm" style="margin-top:4px;" onclick="gradeExamWithAI(${r.id})">🤖 Calificar con IA</button>` : ''}
           <select id="grade-${r.id}" onchange="updateGrade(${r.id}, this.value)" style="margin-top:4px; font-size:12px;">
             <option value="">— Cambiar nota —</option>
             <option value="10">10</option>
@@ -1854,15 +1918,79 @@ function filterAnalysis() {
   renderAnalysis();
 }
 
-function updateGrade(resultId, newScore) {
+async function updateGrade(resultId, newScore) {
   if (!newScore) return;
   const result = allResults.find(r => r.id === resultId);
   if (!result) { toast('❌ Resultado no encontrado'); return; }
+  
+  // Actualizar objeto
   result.score = parseFloat(newScore);
   result.grade = newScore >= 7 ? 'Excelente' : newScore >= 5 ? 'Muy Bien' : newScore >= 3 ? 'Bien' : newScore >= 1 ? 'Regular' : 'Insuficiente';
+  
+  // Guardar en la nube
+  const config = getCloudConfig();
+  if (config && config.databaseURL) {
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(config);
+        }
+        const db = firebase.database();
+        await db.ref('results/' + result.examCode + '/' + result.id).set(result);
+        toast('✅ Nota actualizada y guardada en la nube');
+      } catch (e) {
+        console.error('Error al guardar en la nube:', e);
+        toast('⚠️ Error al guardar en la nube: ' + e.message);
+      }
+  } else {
+      toast('✅ Nota actualizada localmente');
+  }
+  
   localStorage.setItem('results', JSON.stringify(allResults));
-  toast('✅ Nota actualizada a ' + newScore);
   renderAnalysis();
+}
+
+async function gradeExamWithAI(resultId) {
+  const result = allResults.find(r => r.id === resultId);
+  if (!result) return;
+  
+  toast('🤖 Calificando...');
+  
+  try {
+    // Necesitamos el examen original para tener el título y las instrucciones
+    const exam = publishedExams[result.examCode];
+    if (!exam) {
+      // Intentar buscar en la nube si no está local
+      const db = firebase.database();
+      const snapshot = await db.ref('exams/' + result.examCode).once('value');
+      const fetchedExam = snapshot.val();
+      if (!fetchedExam) throw new Error('No se encontró el examen original para calificar.');
+      currentExam = fetchedExam;
+    } else {
+      currentExam = exam;
+    }
+    
+    const grading = await gradeWithGemini(result.answers, currentExam);
+    
+    // Actualizar resultado
+    result.score = grading.score;
+    result.grade = grading.grade;
+    result.summary = grading.summary;
+    result.feedback = grading.feedback;
+    
+    // Guardar en Firebase explícitamente tras calificar
+    const config = getCloudConfig();
+    if (config && config.databaseURL) {
+        const db = firebase.database();
+        await db.ref('results/' + result.examCode + '/' + result.id).set(result);
+    }
+    
+    localStorage.setItem('results', JSON.stringify(allResults));
+    renderAnalysis();
+    toast('✅ Calificación completada y guardada');
+  } catch (e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message);
+  }
 }
 
 // ── EXPORT EXCEL ──
@@ -1870,7 +1998,7 @@ function exportExcel() {
   if (!allResults.length) { toast('⚠️ No hay resultados para exportar'); return; }
   const rows = allResults.map(r => ({
     'Código': r.examCode, 'Examen': r.examTitle, 'Materia': r.subject,
-    'Nombre': r.name, 'Municipio': r.municipio, 'Provincia': r.provincia,
+    'Nombre': r.name, 'Escuela': r.escuela || '', 'Municipio': r.municipio, 'Provincia': r.provincia,
     'Grupo': r.grupo, '#': r.numero, 'Nota': r.score != null ? r.score : '',
     'Calificación': r.grade, 'Resumen': r.summary,
     ...Object.fromEntries(r.answers.map((a, i) => ['Respuesta P'+(i+1), a.answer || a])),
@@ -2039,6 +2167,7 @@ window.addEventListener('load', () => {
     
     // Auto-llenar datos del alumno si vienen en la URL
     if (params.has('name')) document.getElementById('stu-name').value = params.get('name');
+    if (params.has('esc')) document.getElementById('stu-escuela').value = params.get('esc');
     if (params.has('mun')) document.getElementById('stu-municipio').value = params.get('mun');
     if (params.has('prov')) document.getElementById('stu-provincia').value = params.get('prov');
     if (params.has('grp')) document.getElementById('stu-grupo').value = params.get('grp');
