@@ -244,6 +244,7 @@
   </div>
   <button class="topbar-mode" id="btn-back" onclick="goHome()" style="display:none;">⟵ Inicio</button>
   <div class="topbar-profile" id="btn-profile" onclick="goProfile()" title="Perfil">👤</div>
+  <button class="topbar-mode" id="btn-install-pwa" onclick="installPWA()" title="Instalar app" style="display:none; font-size:16px; padding:2px 10px;">📲</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -2198,9 +2199,41 @@ window.addEventListener('load', () => {
 });
 </script>
 <script>
+// ── PWA: Service Worker + Instalación ──
+let deferredPrompt = null;
+
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js');
+  navigator.serviceWorker.register('./sw.js').catch(e => {
+    console.warn('SW registration failed:', e);
+  });
 }
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallButton();
+});
+
+function showInstallButton() {
+  const btn = document.getElementById('btn-install-pwa');
+  if (btn) btn.style.display = 'inline-flex';
+}
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    const btn = document.getElementById('btn-install-pwa');
+    if (btn) btn.style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('btn-install-pwa');
+  if (btn) btn.style.display = 'none';
+  deferredPrompt = null;
+});
 </script>
 </body>
 </html>
