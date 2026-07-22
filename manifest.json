@@ -2,7 +2,7 @@
   "name": "ExamIA — Sistema de Exámenes Inteligente",
   "short_name": "ExamIA",
   "description": "Crea y responde exámenes con calificación automática por Inteligencia Artificial Gemini",
-  "start_url": "./ExamIA.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#f5f7ff",
   "theme_color": "#1a237e",
