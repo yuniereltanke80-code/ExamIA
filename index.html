@@ -2382,6 +2382,15 @@ function restoreDraft() {
 
 // ── INIT ──
 window.addEventListener('load', () => {
+  // Forzar recarga si hay versión nueva (rompe caché del SW)
+  const APP_VER = '2';
+  const oldVer = localStorage.getItem('examia_ver');
+  if (oldVer && oldVer !== APP_VER) {
+    localStorage.setItem('examia_ver', APP_VER);
+    window.location.reload(true);
+    return;
+  }
+  localStorage.setItem('examia_ver', APP_VER);
   adminSessionActive = false;
   updateTeacherCard();
   if (window.location.protocol === 'file:') {
@@ -2474,7 +2483,8 @@ if ('serviceWorker' in navigator) {
       const newSW = reg.installing;
       newSW.addEventListener('statechange', () => {
         if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
-          toast('🔄 Nueva versión disponible. Cierra y abre la app para actualizar.', 6000);
+          toast('🔄 Actualizando a nueva versión...', 2000);
+          setTimeout(() => window.location.reload(true), 2000);
         }
       });
     });
