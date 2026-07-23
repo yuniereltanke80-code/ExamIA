@@ -13,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -244,6 +245,7 @@
   </div>
   <button class="topbar-mode" id="btn-back" onclick="goHome()" style="display:none;">⟵ Inicio</button>
   <div class="topbar-profile" id="btn-profile" onclick="goProfile()" title="Perfil">👤</div>
+  <button class="topbar-mode" id="btn-install-pwa" onclick="installPWA()" title="Instalar app" style="display:none; font-size:16px; padding:2px 10px;">📲</button>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -511,6 +513,9 @@
     </div>
     <button class="btn btn-success btn-sm btn-block" onclick="downloadMyResults()" style="margin-top:10px;">
       📥 Descargar Mis Resultados (.json)
+    </button>
+    <button class="btn btn-accent btn-sm btn-block" onclick="shareResultWhatsApp()" style="margin-top:8px;">
+      📤 Compartir por WhatsApp
     </button>
   </div>
   <button class="btn btn-ghost btn-block" onclick="goHome()" style="margin-bottom:24px;">
@@ -1398,6 +1403,11 @@ function startExam() {
   if (!numero) { toast('⚠️ Ingresa tu número de lista'); return; }
 
   studentInfo = { name, escuela, municipio: mun, provincia: prov, grupo, numero };
+  
+  // Pedir permiso de notificación al iniciar el examen
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 
   document.getElementById('exam-running-title').textContent = currentExam.title;
   document.getElementById('exam-running-subject').textContent = currentExam.subject;
@@ -1556,6 +1566,11 @@ async function submitExam() {
   // Guardar resultado como pendiente de calificar
   const result = await saveResult({ score: null, grade: 'Pendiente', summary: 'Esperando calificación del profesor', feedback: [] }, answers);
   
+  // Guardar resultId localmente e iniciar polling de calificación
+  localStorage.setItem('pendingResultId', result.id);
+  localStorage.setItem('pendingExamCode', currentExam.code);
+  startResultPolling(result.id, currentExam.code, result);
+  
   document.getElementById('topbar-sub').textContent = 'Enviado';
 }
 
@@ -1679,6 +1694,102 @@ async function saveResult(grading, answers) {
   }
   window.dispatchEvent(new StorageEvent('storage', { key: 'results', newValue: JSON.stringify(allResults) }));
   return result;
+}
+
+// ── POLLING DE RESULTADOS + WHATSAPP ──
+function startResultPolling(resultId, examCode, studentResult) {
+  let attempts = 0;
+  const maxAttempts = 600; // 600 * 30s = 5 horas máximo
+  const interval = setInterval(async () => {
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(interval);
+      localStorage.removeItem('pendingResultId');
+      localStorage.removeItem('pendingExamCode');
+      return;
+    }
+    try {
+      const config = getCloudConfig();
+      if (!config || !config.databaseURL) return;
+      if (!firebase.apps.length) firebase.initializeApp(config);
+      const db = firebase.database();
+      const snap = await db.ref('results/' + examCode + '/' + resultId).once('value');
+      const r = snap.val();
+      if (r && r.score != null) {
+        clearInterval(interval);
+        localStorage.removeItem('pendingResultId');
+        localStorage.removeItem('pendingExamCode');
+        notifyResultReady(r);
+      }
+    } catch (e) {
+      console.warn('Polling error:', e);
+    }
+  }, 30000);
+}
+
+function notifyResultReady(r) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  
+  const waUrl = makeWhatsAppUrl(r);
+  
+  // Mostrar notificación Push
+  const n = new Notification('📋 ExamIA - Resultado listo', {
+    body: r.name + ' — Nota: ' + r.score + '/10 — ' + (r.grade || ''),
+    icon: 'icon-192.png',
+    tag: 'result-' + r.id,
+    requireInteraction: true
+  });
+  
+  n.onclick = () => {
+    window.focus();
+    window.open(waUrl, '_blank');
+    n.close();
+  };
+  
+  // También notificar al service worker si está activo
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'show-result',
+      title: '📋 ExamIA - Resultado listo',
+      body: r.name + ' — Nota: ' + r.score + '/10',
+      whatsappUrl: waUrl
+    });
+  }
+}
+
+function makeWhatsAppUrl(r) {
+  const lines = [
+    '📋 *ExamIA - Resultados*',
+    '',
+    '👤 ' + (r.name || '—'),
+    '🏫 ' + (r.escuela || '—'),
+    '📊 Nota: *' + r.score + '/10*',
+    '🏅 ' + (r.grade || '—'),
+    '',
+    '📝 *Respuestas:*'
+  ];
+  
+  (r.answers || []).forEach((a, i) => {
+    const fb = r.feedback?.[i];
+    const pts = fb ? ' (' + fb.pts_earned + '/' + fb.pts_max + ' pts)' : '';
+    const status = a.skipped ? '❌ No respondida' : '✅ ' + (a.answer || '').slice(0, 60);
+    lines.push('P' + (i + 1) + ': ' + status + pts);
+  });
+  
+  lines.push('', '🔗 ' + window.location.origin);
+  
+  return 'https://wa.me/?text=' + encodeURIComponent(lines.join('\n'));
+}
+
+function shareResultWhatsApp() {
+  const myResults = allResults.filter(r => r.name === studentInfo.name && r.grupo === studentInfo.grupo);
+  const last = myResults[myResults.length - 1];
+  if (!last || last.score == null) {
+    toast('⚠️ No hay resultados calificados para compartir');
+    return;
+  }
+  window.open(makeWhatsAppUrl(last), '_blank');
 }
 
 // ── DOWNLOAD STUDENT RESULTS ──
@@ -1828,7 +1939,7 @@ function renderAnalysis() {
         </div>
         <div style="text-align:right;">
           <div style="font-size:14px; font-weight:700; color:${r.score>=7?'var(--success)':r.score>=5?'var(--warn)':'var(--danger)'};">Nota: ${r.score?.toFixed(1)||'—'}</div>
-          ${r.score == null ? `<button class="btn btn-accent btn-sm" style="margin-top:4px;" onclick="gradeExamWithAI(${r.id})">🤖 Calificar con IA</button>` : ''}
+          ${r.score == null ? `<button class="btn btn-accent btn-sm" style="margin-top:4px;" onclick="gradeExamWithAI(${r.id})">🤖 Calificar con IA</button>` : `<button class="btn btn-accent btn-sm" style="margin-top:4px;" onclick="window.open(makeWhatsAppUrl(allResults.find(x=>x.id===${r.id})),'_blank')">📤 WhatsApp</button>`}
           <select id="grade-${r.id}" onchange="updateGrade(${r.id}, this.value)" style="margin-top:4px; font-size:12px;">
             <option value="">— Cambiar nota —</option>
             <option value="10">10</option>
@@ -2183,6 +2294,23 @@ window.addEventListener('load', () => {
     }, 500);
   }
   
+  // Si vino por notificación, cargar resultado directamente
+  if (params.has('resultId')) {
+    const resultId = parseInt(params.get('resultId'));
+    const saved = JSON.parse(localStorage.getItem('results') || '[]');
+    const r = saved.find(x => x.id === resultId);
+    if (r) {
+      allResults = saved;
+      studentInfo = r;
+      currentExam = { code: r.examCode, title: r.examTitle, subject: r.subject };
+      if (r.score != null) {
+        displayResult(r, r.answers || []);
+        showScreen('screen-student-result');
+        toast('📋 Resultado cargado');
+      }
+    }
+  }
+  
   // Escuchar cambios en localStorage para actualizar resultados en tiempo real
   window.addEventListener('storage', (e) => {
     if (e.key === 'results') {
@@ -2195,6 +2323,43 @@ window.addEventListener('load', () => {
       }
     }
   });
+});
+</script>
+<script>
+// ── PWA: Service Worker + Instalación ──
+let deferredPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(e => {
+    console.warn('SW registration failed:', e);
+  });
+}
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallButton();
+});
+
+function showInstallButton() {
+  const btn = document.getElementById('btn-install-pwa');
+  if (btn) btn.style.display = 'inline-flex';
+}
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    const btn = document.getElementById('btn-install-pwa');
+    if (btn) btn.style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('btn-install-pwa');
+  if (btn) btn.style.display = 'none';
+  deferredPrompt = null;
 });
 </script>
 </body>
