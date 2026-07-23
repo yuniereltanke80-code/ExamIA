@@ -473,6 +473,14 @@
     <div id="exam-preview" style="background:var(--paper); border-radius:10px; padding:14px; margin-bottom:14px;"></div>
     <button class="btn btn-primary btn-block" onclick="startExam()">✅ Comenzar Examen</button>
   </div>
+
+  <div class="card" id="mis-notas-card" style="display:none; border-color:var(--primary);">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="card-title" style="margin:0;">📋 Mis Notas</div>
+      <button class="btn btn-sm btn-ghost" onclick="refrescarMisNotas()" title="Buscar actualizaciones">🔄</button>
+    </div>
+    <div id="mis-notas-lista"></div>
+  </div>
 </div>
 
 <!-- ═══════ STUDENT — TAKING EXAM ═══════ -->
@@ -688,6 +696,7 @@ function goStudent() {
   document.getElementById('student-info-card').style.display = 'none';
   document.getElementById('student-code').value = '';
   showAvailableExams();
+  renderMisNotas();
 }
 
 function goProfile() {
@@ -1403,6 +1412,7 @@ function startExam() {
   if (!numero) { toast('⚠️ Ingresa tu número de lista'); return; }
 
   studentInfo = { name, escuela, municipio: mun, provincia: prov, grupo, numero };
+  localStorage.setItem('lastStudentInfo', JSON.stringify(studentInfo));
   
   // Pedir permiso de notificación al iniciar el examen
   if ('Notification' in window && Notification.permission === 'default') {
@@ -1788,6 +1798,84 @@ function shareResultWhatsApp() {
     return;
   }
   window.open(makeWhatsAppUrl(last), '_blank');
+}
+
+// ── MIS NOTAS (Student result dashboard) ──
+function renderMisNotas() {
+  const saved = localStorage.getItem('lastStudentInfo');
+  const card = document.getElementById('mis-notas-card');
+  const lista = document.getElementById('mis-notas-lista');
+  if (!card || !lista) return;
+  if (!saved || !allResults.length) { card.style.display = 'none'; return; }
+  let info;
+  try { info = JSON.parse(saved); } catch(e) { card.style.display = 'none'; return; }
+  const misResults = allResults.filter(r => r.name === info.name && r.grupo === info.grupo);
+  if (!misResults.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  lista.innerHTML = misResults.map(r => {
+    const hasScore = r.score != null;
+    const date = r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '';
+    return `<div style="display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid var(--border); gap:8px;">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:13px;">${r.examTitle || 'Examen'}</div>
+        <div style="font-size:11px; color:var(--muted);">${date}</div>
+        <div style="font-size:12px; margin-top:4px;">
+          ${hasScore
+            ? `<span style="color:var(--success); font-weight:700;">✅ Nota: ${r.score.toFixed(1)}/10 — ${r.grade || ''}</span>`
+            : `<span style="color:var(--warn);">⏳ En espera...</span>`
+          }
+        </div>
+      </div>
+      ${hasScore ? `
+        <button class="btn btn-sm btn-primary" onclick="verDetalleResultado(${r.id})" style="white-space:nowrap;">👁️ Ver</button>
+        <button class="btn btn-sm btn-accent" onclick="window.open(makeWhatsAppUrl(allResults.find(x=>x.id===${r.id})),'_blank')" style="white-space:nowrap;">📤</button>
+      ` : ''}
+    </div>`;
+  }).join('');
+}
+
+function refrescarMisNotas() {
+  const saved = localStorage.getItem('lastStudentInfo');
+  if (!saved) { toast('⚠️ No hay datos de estudiante guardados'); return; }
+  let info;
+  try { info = JSON.parse(saved); } catch(e) { return; }
+  const misResults = allResults.filter(r => r.name === info.name && r.grupo === info.grupo);
+  const pendientes = misResults.filter(r => r.score == null);
+  if (!pendientes.length) { toast('📋 Todos tus resultados ya están calificados'); renderMisNotas(); return; }
+  toast('🔄 Buscando actualizaciones (' + pendientes.length + ' pendientes)...', 3000);
+  const config = getCloudConfig();
+  if (!config || !config.databaseURL) { toast('⚠️ Firebase no configurado'); return; }
+  (async () => {
+    if (!firebase.apps.length) firebase.initializeApp(config);
+    const db = firebase.database();
+    let updated = 0;
+    for (const r of pendientes) {
+      try {
+        const snap = await db.ref('results/' + r.examCode + '/' + r.id).once('value');
+        const fresh = snap.val();
+        if (fresh && fresh.score != null) {
+          Object.assign(r, fresh);
+          updated++;
+        }
+      } catch(e) { console.warn('Error refrescando resultado', r.id, e); }
+    }
+    if (updated) {
+      localStorage.setItem('results', JSON.stringify(allResults));
+      toast('✅ ' + updated + ' resultado(s) actualizado(s)');
+    } else {
+      toast('⏳ Aún no hay calificaciones nuevas');
+    }
+    renderMisNotas();
+  })();
+}
+
+function verDetalleResultado(resultId) {
+  const r = allResults.find(x => x.id === resultId);
+  if (!r) { toast('⚠️ Resultado no encontrado'); return; }
+  studentInfo = { name: r.name, escuela: r.escuela, municipio: r.municipio, provincia: r.provincia, grupo: r.grupo, numero: r.numero };
+  currentExam = { code: r.examCode, title: r.examTitle, subject: r.subject };
+  displayResult(r, r.answers || []);
+  showScreen('screen-student-result');
 }
 
 // ── DOWNLOAD STUDENT RESULTS ──
@@ -2307,6 +2395,19 @@ window.addEventListener('load', () => {
         toast('📋 Resultado cargado');
       }
     }
+  }
+  
+  // Restaurar datos de estudiante guardados
+  const savedInfo = localStorage.getItem('lastStudentInfo');
+  if (savedInfo) {
+    try { studentInfo = JSON.parse(savedInfo); } catch(e) {}
+  }
+  
+  // Reanudar polling si hay resultados pendientes
+  const pendingId = localStorage.getItem('pendingResultId');
+  const pendingCode = localStorage.getItem('pendingExamCode');
+  if (pendingId && pendingCode) {
+    startResultPolling(parseInt(pendingId), pendingCode, null);
   }
   
   // Escuchar cambios en localStorage para actualizar resultados en tiempo real
