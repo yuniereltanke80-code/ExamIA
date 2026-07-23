@@ -2328,9 +2328,20 @@ window.addEventListener('load', () => {
 <script>
 // ── PWA: Service Worker + Instalación ──
 let deferredPrompt = null;
+let swReady = false;
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js').catch(e => {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    swReady = true;
+    reg.addEventListener('updatefound', () => {
+      const newSW = reg.installing;
+      newSW.addEventListener('statechange', () => {
+        if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+          toast('🔄 Nueva versión disponible. Cierra y abre la app para actualizar.', 6000);
+        }
+      });
+    });
+  }).catch(e => {
     console.warn('SW registration failed:', e);
   });
 }
