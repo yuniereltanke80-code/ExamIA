@@ -1132,7 +1132,7 @@ async function switchTab(tab) {
       }
     }
     if (tab === 't-results') renderResults();
-    if (tab === 't-analysis') renderAnalysis();
+    if (tab === 't-analysis') await renderAnalysis();
   }
 }
 
@@ -2012,7 +2012,35 @@ async function renderResults() {
 }
 
 // ── ANÁLISIS DE RESPUESTAS ──
-function renderAnalysis() {
+async function renderAnalysis() {
+  // Cargar resultados de la nube si está configurada (como renderResults)
+  const config = getCloudConfig();
+  if (config && config.databaseURL) {
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(config);
+      const db = firebase.database();
+      const snapshot = await db.ref('results').once('value');
+      const data = snapshot.val();
+      if (data) {
+        let newResults = [];
+        Object.values(data).forEach(examResults => {
+          Object.values(examResults).forEach(r => {
+            newResults.push(r);
+          });
+        });
+        newResults.sort((a, b) => {
+          if (a.provincia !== b.provincia) return a.provincia.localeCompare(b.provincia);
+          if (a.municipio !== b.municipio) return a.municipio.localeCompare(b.municipio);
+          if (a.grupo !== b.grupo) return a.grupo.localeCompare(b.grupo);
+          return parseInt(a.numero) - parseInt(b.numero);
+        });
+        allResults = newResults;
+        localStorage.setItem('results', JSON.stringify(allResults));
+      }
+    } catch (e) {
+      console.warn('No se pudo cargar de la nube:', e);
+    }
+  }
   const el = document.getElementById('analysis-container');
   if (!allResults.length) {
     el.innerHTML = '<div class="empty"><div class="icon">📊</div><p>No hay resultados. Los estudiantes deben enviar sus exámenes primero.</p></div>';
