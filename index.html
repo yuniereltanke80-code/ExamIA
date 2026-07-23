@@ -474,7 +474,7 @@
     <button class="btn btn-primary btn-block" onclick="startExam()">✅ Comenzar Examen</button>
   </div>
 
-  <div class="card" id="mis-notas-card" style="display:none; border-color:var(--primary);">
+  <div class="card" id="mis-notas-card" style="border-color:var(--primary);">
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <div class="card-title" style="margin:0;">📋 Mis Notas</div>
       <button class="btn btn-sm btn-ghost" onclick="refrescarMisNotas()" title="Buscar actualizaciones">🔄</button>
@@ -1806,12 +1806,22 @@ function renderMisNotas() {
   const card = document.getElementById('mis-notas-card');
   const lista = document.getElementById('mis-notas-lista');
   if (!card || !lista) return;
-  if (!saved || !allResults.length) { card.style.display = 'none'; return; }
-  let info;
-  try { info = JSON.parse(saved); } catch(e) { card.style.display = 'none'; return; }
-  const misResults = allResults.filter(r => r.name === info.name && r.grupo === info.grupo);
-  if (!misResults.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
+  if (!saved || !allResults.length) {
+    lista.innerHTML = '<div style="padding:12px; text-align:center; color:var(--muted); font-size:13px;">📭 Aún no has enviado ningún examen</div>';
+    return;
+  }
+  let info;
+  try { info = JSON.parse(saved); } catch(e) { info = null; }
+  if (!info) {
+    lista.innerHTML = '<div style="padding:12px; text-align:center; color:var(--muted); font-size:13px;">📭 Aún no has enviado ningún examen</div>';
+    return;
+  }
+  const misResults = allResults.filter(r => r.name === info.name && r.grupo === info.grupo);
+  if (!misResults.length) {
+    lista.innerHTML = '<div style="padding:12px; text-align:center; color:var(--muted); font-size:13px;">📭 Aún no has enviado ningún examen</div>';
+    return;
+  }
   lista.innerHTML = misResults.map(r => {
     const hasScore = r.score != null;
     const date = r.submittedAt ? new Date(r.submittedAt).toLocaleString() : '';
