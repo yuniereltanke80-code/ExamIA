@@ -1699,7 +1699,7 @@ async function saveResult(grading, answers) {
 // ── POLLING DE RESULTADOS + WHATSAPP ──
 function startResultPolling(resultId, examCode, studentResult) {
   let attempts = 0;
-  const maxAttempts = 600; // 600 * 30s = 5 horas máximo
+  const maxAttempts = 600;
   const interval = setInterval(async () => {
     attempts++;
     if (attempts > maxAttempts) {
@@ -1719,6 +1719,9 @@ function startResultPolling(resultId, examCode, studentResult) {
         clearInterval(interval);
         localStorage.removeItem('pendingResultId');
         localStorage.removeItem('pendingExamCode');
+        allResults.push(r);
+        localStorage.setItem('results', JSON.stringify(allResults));
+        displayResult(r, r.answers || []);
         notifyResultReady(r);
       }
     } catch (e) {
@@ -1728,26 +1731,21 @@ function startResultPolling(resultId, examCode, studentResult) {
 }
 
 function notifyResultReady(r) {
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
-  
   const waUrl = makeWhatsAppUrl(r);
-  
-  // Mostrar notificación Push
+  const msg = `🎯 Tu nota: ${r.score}/10 — ${r.grade || ''}`;
+  toast(msg, 8000);
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const n = new Notification('📋 ExamIA - Resultado listo', {
     body: r.name + ' — Nota: ' + r.score + '/10 — ' + (r.grade || ''),
     icon: 'icon-192.png',
     tag: 'result-' + r.id,
     requireInteraction: true
   });
-  
   n.onclick = () => {
     window.focus();
     window.open(waUrl, '_blank');
     n.close();
   };
-  
-  // También notificar al service worker si está activo
   if (navigator.serviceWorker.controller) {
     navigator.serviceWorker.controller.postMessage({
       type: 'show-result',
